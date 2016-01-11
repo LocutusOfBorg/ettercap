@@ -8,6 +8,7 @@ compiler:
 os:
   - osx
   - linux
+sudo: false
 env:
   # Default build. Release.
   - BUILD_ARGS=""
@@ -91,8 +92,34 @@ matrix:
     - os: osx
       env: BUILD_ARGS="-DENABLE_GTK=Off -DENABLE_CURSES=Off"
 
+addons:
+  coverity_scan:
+    project:
+-      name: "Ettercap/ettercap"
+       description: "Build submitted via Travis CI"
+    build_command_prepend: "mkdir build && cd build && cmake .. -DENABLE_PDF_DOCS=On -DENABLE_IPV6=On -DENABLE_LUA=On -DGTK_BUILD_TYPE=GTK3 -DCMAKE_BUILD_TYPE=Debug"
+    build_command:   "make -j 4"
+  apt_packages:
+    - debhelper
+    - bison
+    - check
+    - cmake
+    - flex
+    - ghostscript
+    - libbsd-dev
+    - libcurl4-openssl-dev
+    - libgtk2.0-dev
+    - libltdl-dev
+    - libluajit-5.1-dev
+    - libncurses5-dev
+    - libnet1-dev
+    - libpcap-dev
+    - libpcre3-dev
+    - libssl-dev
+    - libgtk-3-dev
+    - libgeoip-dev
+
 before_install:
-    - if [ ${TRAVIS_OS_NAME} = "linux" ]; then sudo apt-get update -qq; sudo apt-get install debhelper bison check cmake flex ghostscript libbsd-dev libcurl4-openssl-dev libgtk2.0-dev libltdl-dev libluajit-5.1-dev libncurses5-dev libnet1-dev libpcap-dev libpcre3-dev libssl-dev libgtk-3-dev libgeoip-dev; fi
     - if [ ${TRAVIS_OS_NAME} = "osx" ]; then brew update; brew install check curl; brew install ghostscript gtk+ gtk+3; brew install libidn libnet; brew install luajit openssl pcre rtmpdump geoip; fi
 script:
   - mkdir build && cd build && cmake -DENABLE_TESTS=On $BUILD_ARGS .. && make && make test_verbose
