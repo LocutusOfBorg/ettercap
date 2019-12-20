@@ -25,6 +25,7 @@
 #include <ec_profiles.h>
 #include <ec_manuf.h>
 #include <ec_services.h>
+#include <ec_geoip.h>
 
 /* proto */
 
@@ -110,6 +111,13 @@ void gtkui_show_profiles(void)
    gtk_tree_view_column_set_sort_column_id (column, 2);
    gtk_tree_view_append_column (GTK_TREE_VIEW(treeview), column);
 
+#ifdef HAVE_GEOIP
+   renderer = gtk_cell_renderer_text_new ();
+   column = gtk_tree_view_column_new_with_attributes ("Country", renderer, "text", 3, NULL);
+   gtk_tree_view_column_set_sort_column_id (column, 3);
+   gtk_tree_view_append_column (GTK_TREE_VIEW(treeview), column);
+#endif
+
    refresh_profiles(NULL);
    gtk_tree_view_set_model(GTK_TREE_VIEW (treeview), GTK_TREE_MODEL (ls_profiles));
 
@@ -189,18 +197,19 @@ static gboolean refresh_profiles(gpointer data)
    (void) data;
 
    if(!ls_profiles) {
-      ls_profiles = gtk_list_store_new (4, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_POINTER);
+      ls_profiles = gtk_list_store_new (5, G_TYPE_STRING, G_TYPE_STRING, 
+                                           G_TYPE_STRING, G_TYPE_STRING, G_TYPE_POINTER);
    }
 
    /* get iter for first item in list widget */
    model = GTK_TREE_MODEL(ls_profiles);
    gotiter = gtk_tree_model_get_iter_first(model, &iter);
 
-   TAILQ_FOREACH(hcurr, &GBL_PROFILES, next) {
+   TAILQ_FOREACH(hcurr, &EC_GBL_PROFILES, next) {
       /* see if the item is already in our list */
       gotiter = gtk_tree_model_get_iter_first(model, &iter);
       while(gotiter) {
-         gtk_tree_model_get (model, &iter, 3, &hitem, -1);
+         gtk_tree_model_get (model, &iter, 4, &hitem, -1);
          if(hcurr == hitem) {
             found = 0;
             /* search at least one account */
@@ -257,7 +266,13 @@ static gboolean refresh_profiles(gpointer data)
       gtk_list_store_set (ls_profiles, &iter, 
                           0, (found)?"X":" ",
                           1, ip_addr_ntoa(&hcurr->L3_addr, tmp), 
-                          3, hcurr, -1);
+                          4, hcurr, -1);
+
+#ifdef HAVE_GEOIP
+      if (EC_GBL_CONF->geoip_support_enable)
+         gtk_list_store_set(ls_profiles, &iter, 
+               3, geoip_country_by_ip(&hcurr->L3_addr), -1);
+#endif
 
       /* treat hostname resolution differently due to async processing */
       if (strcmp(hcurr->hostname,"")) {
@@ -297,7 +312,7 @@ static void gtkui_profile_detail(void)
    char tmp[MAX_ASCII_ADDR_LEN];
    char os[OS_LEN+1];
    gchar *str, *markup;
-   guint nrows = 3, ncols = 3, col = 0, row = 0;
+   guint nrows = 2, ncols = 3, col = 0, row = 0;
 
    
    DEBUG_MSG("gtkui_profile_detail");
@@ -343,30 +358,46 @@ static void gtkui_profile_detail(void)
    gtk_misc_set_alignment(GTK_MISC(label), 0, 0);
    gtk_table_attach_defaults(GTK_TABLE(table), label, col+1, col+3, row, row+1);
 
-   row++;
-   label = gtk_label_new("Hostname:");
-   gtk_misc_set_alignment(GTK_MISC(label), 0, 0);
-   gtk_table_attach(GTK_TABLE(table), label, col, col+1, row, row+1, GTK_FILL, GTK_FILL, 0, 0);
+   if (EC_GBL_OPTIONS->resolve) {
+      row++;
+      label = gtk_label_new("Hostname:");
+      gtk_misc_set_alignment(GTK_MISC(label), 0, 0);
+      gtk_table_attach(GTK_TABLE(table), label, col, col+1, row, row+1, GTK_FILL, GTK_FILL, 0, 0);
 
-   label = gtk_label_new(h->hostname);
-   if (!strcmp(h->hostname,"")) {
-      /* resolve the hostname (using the cache) */
-      if (host_iptoa(&h->L3_addr, h->hostname) == -E_NOMATCH) {
-         gtk_label_set_text(GTK_LABEL(label), "resolving...");
-         struct resolv_object *ro;
-         SAFE_CALLOC(ro, 1, sizeof(struct resolv_object));
-         ro->type = GTK_TYPE_LABEL;
-         ro->widget = GTK_WIDGET(label);
-         ro->ip = &h->L3_addr;
-         detail_timer = g_timeout_add(1000, gtkui_iptoa_deferred, ro);
+      label = gtk_label_new(h->hostname);
+      if (!strcmp(h->hostname,"")) {
+         /* resolve the hostname (using the cache) */
+         if (host_iptoa(&h->L3_addr, h->hostname) == -E_NOMATCH) {
+            gtk_label_set_text(GTK_LABEL(label), "resolving...");
+            struct resolv_object *ro;
+            SAFE_CALLOC(ro, 1, sizeof(struct resolv_object));
+            ro->type = GTK_TYPE_LABEL;
+            ro->widget = GTK_WIDGET(label);
+            ro->ip = &h->L3_addr;
+            detail_timer = g_timeout_add(1000, gtkui_iptoa_deferred, ro);
+         }
+         else {
+            gtk_label_set_text(GTK_LABEL(label), h->hostname);
+         }
       }
-      else {
-         gtk_label_set_text(GTK_LABEL(label), h->hostname);
-      }
+      gtk_label_set_selectable(GTK_LABEL(label), TRUE);
+      gtk_misc_set_alignment(GTK_MISC(label), 0, 0);
+      gtk_table_attach_defaults(GTK_TABLE(table), label, col+1, col+3, row, row+1);
    }
-   gtk_label_set_selectable(GTK_LABEL(label), TRUE);
-   gtk_misc_set_alignment(GTK_MISC(label), 0, 0);
-   gtk_table_attach_defaults(GTK_TABLE(table), label, col+1, col+3, row, row+1);
+
+#ifdef HAVE_GEOIP
+   if (EC_GBL_CONF->geoip_support_enable) {
+      row++;
+      label = gtk_label_new("Location:");
+      gtk_misc_set_alignment(GTK_MISC(label), 0, 0);
+      gtk_table_attach(GTK_TABLE(table), label, col, col+1, row, row+1, GTK_FILL, GTK_FILL, 0, 0);
+
+      label = gtk_label_new(geoip_country_by_ip(&h->L3_addr));
+      gtk_label_set_selectable(GTK_LABEL(label), TRUE);
+      gtk_misc_set_alignment(GTK_MISC(label), 0, 0);
+      gtk_table_attach_defaults(GTK_TABLE(table), label, col+1, col+3, row, row+1);
+   }
+#endif
 
    if (h->type & FP_HOST_LOCAL || h->type == FP_UNKNOWN) {
       row++;
@@ -607,7 +638,7 @@ static struct host_profile *gtkui_profile_selected(void) {
    model = GTK_TREE_MODEL (ls_profiles);
 
    if (gtk_tree_selection_get_selected (GTK_TREE_SELECTION (selection), &model, &iter)) {
-      gtk_tree_model_get (model, &iter, 3, &h, -1);
+      gtk_tree_model_get (model, &iter, 4, &h, -1);
    } else
       return(NULL); /* nothing is selected */
 

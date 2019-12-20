@@ -54,24 +54,28 @@
       - decryption with given keys
       - DES support
 
+   + ETTER.FINGER.MAC
+   Allow Ettercap to use oui.txt as downloaded, instead of etter.finger.mac.
+     Discussion: https://github.com/Ettercap/ettercap/pull/840
+      - change the code to use the standard oui.txt, and;
+      - use the system one when available. See:
+      https://packages.debian.org/sid/all/ieee-data/filelist
+      https://lintian.debian.org/tags/source-contains-data-from-ieee-data-oui-db.html
+
 ==================
   LONG TERM TODO
 ==================
    
    + GTK
-      - Rework GTK3 UI using the latest API (GtkBuilder)
       - Phase out GTK2
+      - externalize XML code to own resouce files
+      - transform static widgets to GtkBuilder XML files
 
    + SSH2 dissection :) (yes, it can be done)
 
    + IPv6
       - router discovery
-      - UI support for IPv6 address
-      - neighbor discovery poisoning
-      - scan method for IPv6 hosts 
       - DHCPv6 MITM 
-      - make etterfilter IPv6 capable
-      - make etterlog IPv6 capable
 
    + Rendevouz mitm
 
@@ -95,6 +99,12 @@
 
    + INET
       - handle fragmented packets
+
+   + LUA BINDINGS
+      - There's a lot to take care of.Too much to relate here. See:
+      https://github.com/Ettercap/ettercap/pull/858
+      https://github.com/Ettercap/ettercap/pull/869 and
+      https://github.com/Ettercap/ettercap/pull/698
 
 ==================
      FOR NOW

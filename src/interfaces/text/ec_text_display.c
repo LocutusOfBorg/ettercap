@@ -42,7 +42,7 @@ void text_print_packet(struct packet_object *po)
    int ret;
 
    /* don't display the packet */
-   if (GBL_OPTIONS->quiet)
+   if (EC_GBL_OPTIONS->quiet)
       return;
    
    /* 
@@ -52,8 +52,8 @@ void text_print_packet(struct packet_object *po)
     * in this way we can match e.t.t.e.r.c.a.p in TEXT mode with
     * the "ettercap" regex
     */
-   if (GBL_OPTIONS->regex && 
-       regexec(GBL_OPTIONS->regex, (const  char  *)po->DATA.disp_data, 0, NULL, 0) != 0) {
+   if (EC_GBL_OPTIONS->regex && 
+       regexec(EC_GBL_OPTIONS->regex, (const  char  *)po->DATA.disp_data, 0, NULL, 0) != 0) {
       return;
    }
                
@@ -67,7 +67,7 @@ void text_print_packet(struct packet_object *po)
    /* 
     * format the packet with the function set by the user
     */
-   ret = GBL_FORMAT(po->DATA.disp_data, po->DATA.disp_len, tmp);
+   ret = EC_GBL_FORMAT(po->DATA.disp_data, po->DATA.disp_len, tmp);
 
    /* print the headers */
    display_headers(po);
@@ -83,7 +83,7 @@ static void display_headers(struct packet_object *po)
 
    char tmp1[MAX_ASCII_ADDR_LEN];
    char tmp2[MAX_ASCII_ADDR_LEN];
-   char flags[8];
+   char flags[10];
    char *p = flags;
    char proto[5];
    
@@ -91,9 +91,13 @@ static void display_headers(struct packet_object *po)
    memset(proto, 0, sizeof(proto));   
 
    /* display the date. ec_ctime() has no newline at end. */
+#if defined OS_DARWIN
+   fprintf(stdout, "\n\n%s [%d]\n", ec_ctime(&po->ts), po->ts.tv_usec);
+#else
    fprintf(stdout, "\n\n%s [%lu]\n", ec_ctime(&po->ts), po->ts.tv_usec);
+#endif
 
-   if (GBL_OPTIONS->ext_headers) {
+   if (EC_GBL_OPTIONS->ext_headers) {
       /* display the mac addresses */
       mac_addr_ntoa(po->L2.src, tmp1);
       mac_addr_ntoa(po->L2.dst, tmp2);
@@ -106,14 +110,18 @@ static void display_headers(struct packet_object *po)
    if (po->L4.flags & TH_RST) *p++ = 'R';
    if (po->L4.flags & TH_ACK) *p++ = 'A';
    if (po->L4.flags & TH_PSH) *p++ = 'P';
+   if (po->L4.flags & TH_URG) *p++ = 'U';
+   if (po->L4.flags & TH_ECE) *p++ = 'E'; /* rfc 2481/3168 */
+   if (po->L4.flags & TH_CWR) *p++ = 'C'; /* rfc 2481/3168 */
+   *p++ = '\0';
   
    /* determine the proto */
    switch(po->L4.proto) {
       case NL_TYPE_TCP:
-         strncpy(proto, "TCP", 3);
+         strncpy(proto, "TCP", 4);
          break;
       case NL_TYPE_UDP:
-         strncpy(proto, "UDP", 3);
+         strncpy(proto, "UDP", 4);
          break;
    }
    

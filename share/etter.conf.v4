@@ -47,6 +47,8 @@ checksum_check = 0            # boolean value
 submit_fingerprint = 0        # boolean valid (set if you want ettercap to submit unknown finger prints)
 checksum_warning = 0          # boolean value (valid only if checksum_check is 1)
 sniffing_at_startup = 1       # boolean value
+geoip_support_enable = 1      # boolean value (set geoip_data_file of GeoIP database file cannot be located)
+gtkui_prefer_dark_theme = 0   # boolean value
 
 ############################################################################
 #
@@ -126,7 +128,7 @@ color_border = 7
 color_title = 3 
 color_focus = 6 
 color_menu_bg = 4
-color_menu_fg = 6 
+color_menu_fg = 7
 color_window_bg = 4 
 color_window_fg = 7 
 color_selection_bg = 6 
@@ -147,6 +149,11 @@ utf8_encoding = "ISO-8859-1"
 # the command used by the remote_browser plugin
 remote_browser = "xdg-open http://%host%url"
 
+# location of the GeoIP database file in case it's not the standard location
+# this is mostly necessary on Windows or if libgeoip is manually build
+geoip_data_file = "/usr/local/share/GeoIP/GeoIP.dat"
+geoip_data_file_v6 = "/usr/local/share/GeoIP/GeoIPv6.dat"
+
 
 #####################################
 #       redir_command_on/off
@@ -164,42 +171,25 @@ remote_browser = "xdg-open http://%host%url"
 #---------------
 
 # if you use ipchains:
-   #redir_command_on = "ipchains -A input -i %iface -p tcp -s 0/0 -d 0/0 %port -j REDIRECT %rport"
-   #redir_command_off = "ipchains -D input -i %iface -p tcp -s 0/0 -d 0/0 %port -j REDIRECT %rport"
+   #redir_command_on = "ipchains -A input -i %iface -p tcp -s %source -d %destination %port -j REDIRECT %rport"
+   #redir_command_off = "ipchains -D input -i %iface -p tcp -s %source -d %destination %port -j REDIRECT %rport"
 
 # if you use iptables:
-   #redir_command_on = "iptables -t nat -A PREROUTING -i %iface -p tcp --dport %port -j REDIRECT --to-port %rport"
-   #redir_command_off = "iptables -t nat -D PREROUTING -i %iface -p tcp --dport %port -j REDIRECT --to-port %rport"
+   #redir_command_on = "iptables -t nat -A PREROUTING -i %iface -p tcp -s %source -d %destination --dport %port -j REDIRECT --to-port %rport"
+   #redir_command_off = "iptables -t nat -D PREROUTING -i %iface -p tcp -s %source -d %destination --dport %port -j REDIRECT --to-port %rport"
 
 #---------------
 #    Mac Os X
 #---------------
 
-# quick and dirty way:
-   #redir_command_on = "ipfw -q add set %set fwd 127.0.0.1,%rport tcp from any to any %port in via %iface"
+# if you use ipfw:
+   #redir_command_on = "ipfw -q add set %set fwd 127.0.0.1,%rport tcp from %source to %destination %port in via %iface"
    #redir_command_off = "ipfw -q delete set %set"
 
-# a better solution is to use a script that keeps track of the rules interted
-# and then deletes them on exit:
+# if you use BSD PF:
+   #redir_command_on = "(pfctl -sn 2> /dev/null; echo 'rdr pass on %iface inet proto tcp from %source to %destination port %port -> localhost port %rport') | pfctl -f - 2> /dev/null"
+   #redir_command_off = "pfctl -Psn 2> /dev/null | egrep -v 'inet .+ %source to %destination port = %port' | pfctl -f - 2> /dev/null"
 
- # redir_command_on:
- # ----- cut here -------
- #   #!/bin/sh
- #   if [ -a "/tmp/osx_ipfw_rules" ]; then
- #      ipfw -q add `head -n 1 osx_ipfw_rules` fwd 127.0.0.1,$1 tcp from any to any $2 in via $3 
- #   else
- #      ipfw add fwd 127.0.0.1,$1 tcp from any to any $2 in via $3 | cut -d " " -f 1 >> /tmp/osx_ipfw_rules
- #   fi
- # ----- cut here -------
-
- # redir_command_off:
- # ----- cut here -------
- #   #!/bin/sh
- #   if [ -a "/tmp/osx_ipfw_rules" ]; then
- #      ipfw -q delete `head -n 1 /tmp/osx_ipfw_rules`
- #      rm -f /tmp/osx_ipfw_rules
- #   fi
- # ----- cut here -------
 
 #---------------
 #   FreeBSD
@@ -214,8 +204,8 @@ remote_browser = "xdg-open http://%host%url"
 # `pfctl -si | grep Status | awk '{print $2;}'`. If "Disabled", enable it with
 # `pfctl -e`.
 
-   #redir_command_on = "(pfctl -sn 2> /dev/null; echo 'rdr pass on %iface inet proto tcp from any to any port %port -> localhost port %rport') | pfctl -f - 2> /dev/null"
-   #redir_command_off = "pfctl -Psn 2> /dev/null | grep -v %port | pfctl -f - 2> /dev/null"
+   #redir_command_on = "(pfctl -sn 2> /dev/null; echo 'rdr pass on %iface inet proto tcp from %source to %destination port %port -> localhost port %rport') | pfctl -f - 2> /dev/null"
+   #redir_command_off = "pfctl -Psn 2> /dev/null | egrep -v 'inet .+ %source to %destination port = %port' | pfctl -f - 2> /dev/null"
 
 
 #---------------

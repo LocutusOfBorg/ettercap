@@ -86,6 +86,8 @@ void gtkui_create_menu(int live)
 #endif
       "        <separator />"
       "        <menuitem name='StopMitmAttacks' action='StopMitmAttacksAction' />"
+      "        <separator />"
+      "        <menuitem name='SSLRedirects' action='SSLRedirectsAction' />"
       "     </menu>"
       "     <menu name='FiltersMenu' action='FiltersMenuAction'>"
       "        <menuitem name='LoadFilter' action='LoadFilterAction' />"
@@ -299,6 +301,12 @@ void gtkui_create_menu(int live)
          "StopMitmAttacksAction", NULL,
          "Stop mitm attack(s)", NULL,
          NULL, G_CALLBACK(gtkui_mitm_stop)
+      },
+
+      {
+         "SSLRedirectsAction", NULL,
+         "SSL Intercept", NULL,
+         NULL, G_CALLBACK(gtkui_sslredir_show)
       }
    };
 
@@ -493,26 +501,26 @@ void gtkui_create_menu(int live)
 
    
 
-   if(GBL_OPTIONS->reversed) {
-      GBL_OPTIONS->reversed = 0;
+   if(EC_GBL_OPTIONS->reversed) {
+      EC_GBL_OPTIONS->reversed = 0;
       action = gtk_ui_manager_get_action(menu_manager, "/MenuBar/TargetsMenu/ReverseMatching");
       gtk_toggle_action_set_active(GTK_TOGGLE_ACTION(action), TRUE);
    }
 
-   if(GBL_OPTIONS->resolve) {
-      GBL_OPTIONS->resolve = 0;
+   if(EC_GBL_OPTIONS->resolve) {
+      EC_GBL_OPTIONS->resolve = 0;
       action = gtk_ui_manager_get_action(menu_manager, "/MenuBar/ViewMenu/ResolveIpAddresses");
       gtk_toggle_action_set_active(GTK_TOGGLE_ACTION(action), TRUE);
    }
 
-   if(GBL_OPTIONS->compress) {
-      GBL_OPTIONS->compress = 0;
+   if(EC_GBL_OPTIONS->compress) {
+      EC_GBL_OPTIONS->compress = 0;
       action = gtk_ui_manager_get_action(menu_manager, "/MenuBar/LoggingMenu/LogCompressed");
       gtk_toggle_action_set_active(GTK_TOGGLE_ACTION(action), TRUE);
    }
 
    /* Some menus doesn't apply if started in offline or bridged sniffing mode */
-   if (live == 0 || GBL_SNIFF->type == SM_BRIDGED) {
+   if (live == 0 || EC_GBL_SNIFF->type == SM_BRIDGED) {
       gtk_widget_set_visible(gtk_ui_manager_get_widget(menu_manager, "/MenuBar/HostsMenu"), FALSE);
       gtk_widget_set_visible(gtk_ui_manager_get_widget(menu_manager, "/MenuBar/MitmMenu"), FALSE);
    }

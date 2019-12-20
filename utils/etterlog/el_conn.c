@@ -54,7 +54,7 @@ void conn_table_create(void)
    int ret, count = 0;
    u_char *buf;
 
-   if (GBL->hdr.type == LOG_INFO)
+   if (EL_GBL->hdr.type == LOG_INFO)
       FATAL_ERROR("LOG_INFO files don't contain connections !");
    
    
@@ -134,7 +134,7 @@ static int insert_table(struct log_header_packet *pck, char *buf)
           !ip_addr_cmp(&c->L3_dst, &pck->L3_dst)) {
 
          /* add to the stream (if necessary) */
-         if (GBL_OPTIONS->decode)
+         if (EL_GBL_OPTIONS->decode)
             stream_add(&c->so, pck, buf);
          
          return 0;
@@ -148,7 +148,7 @@ static int insert_table(struct log_header_packet *pck, char *buf)
           !ip_addr_cmp(&c->L3_dst, &pck->L3_src)) {
          
          /* add to the stream (if necessary) */
-         if (GBL_OPTIONS->decode)
+         if (EL_GBL_OPTIONS->decode)
             stream_add(&c->so, pck, buf);
          
          return 0;
@@ -170,7 +170,7 @@ static int insert_table(struct log_header_packet *pck, char *buf)
    stream_init(&c->so);
    
    /* add to the stream (if necessary) */
-   if (GBL_OPTIONS->decode)
+   if (EL_GBL_OPTIONS->decode)
       stream_add(&c->so, pck, buf);
    
    SLIST_INSERT_HEAD(&conn_list_head, c, next);
@@ -186,7 +186,6 @@ void filcon_compile(char *conn)
 {
 #define MAX_TOK 5
    char valid[] = "1234567890.:TCPUDtcpud";
-   struct in_addr ipaddr;
    char *tok[MAX_TOK];
    char *p;
    int i = 0;
@@ -218,15 +217,12 @@ void filcon_compile(char *conn)
    conn_target.L4_dst = htons(atoi(tok[4]));
 
    /* source and dest ip */
-   if (inet_aton(tok[1], &ipaddr) == 0)
+   if (ip_addr_pton(tok[1], &conn_target.L3_src) != E_SUCCESS)
       FATAL_ERROR("Invalid IP address (%s)", tok[1]);
 
-   ip_addr_init(&conn_target.L3_src, AF_INET, (u_char *)&ipaddr );
-      
-   if (inet_aton(tok[3], &ipaddr) == 0)
+   if (ip_addr_pton(tok[3], &conn_target.L3_dst) != E_SUCCESS)
       FATAL_ERROR("Invalid IP address (%s)", tok[3]);
 
-   ip_addr_init(&conn_target.L3_dst, AF_INET, (u_char *)&ipaddr );
      
    /* free the data */
    for(i=0; i < MAX_TOK; i++)
@@ -265,7 +261,7 @@ int is_conn(struct log_header_packet *pck, int *versus)
         pck->L4_src == conn_target.L4_src &&
         pck->L4_dst == conn_target.L4_dst &&
         /* the packet is from source, but we are interested only in dest */
-        !GBL_OPTIONS->only_dest ) {
+        !EL_GBL_OPTIONS->only_dest ) {
       good = 1;
       *versus = VERSUS_SOURCE;
    }
@@ -276,13 +272,13 @@ int is_conn(struct log_header_packet *pck, int *versus)
         pck->L4_src == conn_target.L4_dst &&
         pck->L4_dst == conn_target.L4_src &&
         /* the packet is from dest, but we are interested only in source */
-        !GBL_OPTIONS->only_source ) {
+        !EL_GBL_OPTIONS->only_source ) {
       good = 1;
       *versus = VERSUS_DEST;
    }
    
    /* check the reverse option */
-   if (GBL_OPTIONS->reverse ^ (good && proto) ) 
+   if (EL_GBL_OPTIONS->reverse ^ (good && proto) ) 
       return 1;
    else
       return 0;

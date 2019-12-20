@@ -73,10 +73,10 @@ int send_to_L3(struct packet_object *po)
    int c;
 
    switch(ntohs(po->L3.src.addr_type)) {
-      case AF_INET:  l = GBL_LNET->lnet_IP4;
+      case AF_INET:  l = EC_GBL_LNET->lnet_IP4;
                      break;
 #ifdef WITH_IPV6
-      case AF_INET6: l = GBL_LNET->lnet_IP6;
+      case AF_INET6: l = EC_GBL_LNET->lnet_IP6;
                      break;
 #endif
       default:       l = NULL;
@@ -117,7 +117,7 @@ int send_to_L3(struct packet_object *po)
 
 int send_to_L2(struct packet_object *po)
 {
-   return send_to_iface(po, GBL_IFACE); 
+   return send_to_iface(po, EC_GBL_IFACE); 
 }
 
 /*
@@ -126,7 +126,7 @@ int send_to_L2(struct packet_object *po)
 
 int send_to_bridge(struct packet_object *po)
 {
-   return send_to_iface(po, GBL_BRIDGE);
+   return send_to_iface(po, EC_GBL_BRIDGE);
 }
 
 int send_to_iface(struct packet_object *po, struct iface_env *iface)
@@ -279,8 +279,8 @@ int send_arp(u_char type, struct ip_addr *sip, u_int8 *smac, struct ip_addr *tip
    int c;
 
    /* if not lnet warn the developer ;) */
-   BUG_IF(GBL_IFACE->lnet == NULL);
-   l = GBL_IFACE->lnet;
+   BUG_IF(EC_GBL_IFACE->lnet == NULL);
+   l = EC_GBL_IFACE->lnet;
 
    SEND_LOCK;
 
@@ -310,7 +310,7 @@ int send_arp(u_char type, struct ip_addr *sip, u_int8 *smac, struct ip_addr *tip
       tmac = MEDIA_BROADCAST;
    
    /* add the media header */
-   t = ec_build_link_layer(GBL_PCAP->dlt, tmac, ETHERTYPE_ARP, l);
+   t = ec_build_link_layer(EC_GBL_PCAP->dlt, tmac, ETHERTYPE_ARP, l);
    if (t == -1)
       FATAL_ERROR("Interface not suitable for layer2 sending");
    
@@ -336,8 +336,8 @@ int send_L3_icmp_unreach(struct packet_object *po)
    libnet_t *l;
 
    /* if not lnet warn the developer ;) */
-   BUG_IF(GBL_LNET->lnet_IP4 == 0);
-   l = GBL_LNET->lnet_IP4;
+   BUG_IF(EC_GBL_LNET->lnet_IP4 == 0);
+   l = EC_GBL_LNET->lnet_IP4;
    SEND_LOCK;
 
 
@@ -400,8 +400,8 @@ int send_L3_icmp(u_char type, struct ip_addr *sip, struct ip_addr *tip)
    libnet_t *l;
 
    /* if not lnet warn the developer ;) */
-   BUG_IF(GBL_LNET->lnet_IP4 == 0);
-   l = GBL_LNET->lnet_IP4;
+   BUG_IF(EC_GBL_LNET->lnet_IP4 == 0);
+   l = EC_GBL_LNET->lnet_IP4;
 
    SEND_LOCK;
 
@@ -467,8 +467,8 @@ int send_L2_icmp_echo(u_char type, struct ip_addr *sip, struct ip_addr *tip, u_i
    int c;
    libnet_t *l;
    /* if not lnet warn the developer ;) */
-   BUG_IF(GBL_IFACE->lnet == 0);
-   l = GBL_IFACE->lnet;
+   BUG_IF(EC_GBL_IFACE->lnet == 0);
+   l = EC_GBL_IFACE->lnet;
    
    SEND_LOCK;
 
@@ -509,7 +509,7 @@ int send_L2_icmp_echo(u_char type, struct ip_addr *sip, struct ip_addr *tip, u_i
    libnet_toggle_checksum(l, t, LIBNET_ON);
    
    /* add the media header */
-   t = ec_build_link_layer(GBL_PCAP->dlt, tmac, ETHERTYPE_IP, l);
+   t = ec_build_link_layer(EC_GBL_PCAP->dlt, tmac, ETHERTYPE_IP, l);
    if (t == -1)
       FATAL_ERROR("Interface not suitable for layer2 sending");
 
@@ -538,8 +538,8 @@ int send_icmp_redir(u_char type, struct ip_addr *sip, struct ip_addr *gw, struct
    int c;
  
    /* if not lnet warn the developer ;) */
-   BUG_IF(GBL_IFACE->lnet == 0);
-   l = GBL_IFACE->lnet;
+   BUG_IF(EC_GBL_IFACE->lnet == 0);
+   l = EC_GBL_IFACE->lnet;
   
    /* retrieve the old ip header */
    ip = (struct libnet_ipv4_hdr *)po->L3.header;
@@ -598,7 +598,7 @@ int send_icmp_redir(u_char type, struct ip_addr *sip, struct ip_addr *gw, struct
    libnet_toggle_checksum(l, t, LIBNET_ON);
  
    /* add the media header */
-   t = ec_build_link_layer(GBL_PCAP->dlt, po->L2.src, ETHERTYPE_IP, l);
+   t = ec_build_link_layer(EC_GBL_PCAP->dlt, po->L2.src, ETHERTYPE_IP, l);
    if (t == -1)
       FATAL_ERROR("Interface not suitable for layer2 sending");
   
@@ -618,15 +618,65 @@ int send_icmp_redir(u_char type, struct ip_addr *sip, struct ip_addr *gw, struct
 }
 
 #ifdef WITH_IPV6
-int send_icmp6_echo(struct ip_addr *sip, struct ip_addr *tip)
+int send_L3_icmp6_echo(struct ip_addr *sip, struct ip_addr *tip)
 {
    libnet_ptag_t t;
    struct libnet_in6_addr src, dst;
    int c;
    libnet_t *l;
 
-   BUG_IF(GBL_LNET->lnet_IP6 == NULL);
-   l = GBL_LNET->lnet_IP6;
+   BUG_IF(EC_GBL_LNET->lnet_IP6 == 0);
+   l = EC_GBL_LNET->lnet_IP6;
+
+   SEND_LOCK;
+
+   memcpy(&src, sip->addr, sizeof(src));
+   memcpy(&dst, tip->addr, sizeof(dst));
+
+   t = libnet_build_icmpv6_echo(ICMP6_ECHO_REQUEST,   /* type */
+                                0,                    /* code */
+                                0,                    /* checksum */
+                                EC_MAGIC_16,          /* id */
+                                0,                    /* sequence number */
+                                NULL,                 /* data */
+                                0,                    /* its size */
+                                l,                    /* handle */
+                                0);
+   ON_ERROR(t, -1, "libnet_build_icmpv6_echo: %s", libnet_geterror(l));
+   libnet_toggle_checksum(l, t, LIBNET_ON);
+
+   t = libnet_build_ipv6(0,                           /* tc */
+                         0,                           /* flow label */
+                         LIBNET_ICMPV6_H,             /* next header size */
+                         IPPROTO_ICMPV6,              /* next header */
+                         255,                         /* hop limit */
+                         src,                         /* source */
+                         dst,                         /* destination */
+                         NULL,                        /* payload and size */
+                         0,
+                         l,                           /* handle */
+                         0);                          /* ptag */
+   ON_ERROR(t, -1, "libnet_build_ipv6: %s", libnet_geterror(l));
+
+   c = libnet_write(l);
+   ON_ERROR(c, -1, "libnet_write: %s", libnet_geterror(l));
+
+   libnet_clear_packet(l);
+
+   SEND_UNLOCK;
+
+   return c;
+}
+
+int send_L2_icmp6_echo(struct ip_addr *sip, struct ip_addr *tip, u_int8 *tmac)
+{
+   libnet_ptag_t t;
+   struct libnet_in6_addr src, dst;
+   int c;
+   libnet_t *l;
+
+   BUG_IF(EC_GBL_IFACE->lnet == NULL);
+   l = EC_GBL_IFACE->lnet;
 
    SEND_LOCK;
 
@@ -658,6 +708,12 @@ int send_icmp6_echo(struct ip_addr *sip, struct ip_addr *tip)
                          l,                           /* handle */
                          0);                          /* ptag */
    ON_ERROR(t, -1, "libnet_build_ipv6: %s", libnet_geterror(l));
+
+   /* add the media header */
+   t = ec_build_link_layer(EC_GBL_PCAP->dlt, tmac, ETHERTYPE_IPV6, l);
+   if (t == -1)
+      FATAL_ERROR("Interface not suitable for layer2 sending");
+
    c = libnet_write(l);
    ON_ERROR(c, -1, "libnet_write: %s", libnet_geterror(l));
 
@@ -673,16 +729,16 @@ int send_icmp6_echo(struct ip_addr *sip, struct ip_addr *tip)
  * RFC2460 conforming hosts, respond with a ICMPv6 parameter problem 
  * message even those not intended to respond to ICMP echos
  */
-int send_icmp6_echo_opt(struct ip_addr *sip, struct ip_addr *tip, u_int8* o_data, u_int32 o_len)
+int send_L2_icmp6_echo_opt(struct ip_addr *sip, struct ip_addr *tip, u_int8* o_data, u_int32 o_len, u_int8 *tmac)
 {
     libnet_ptag_t t;
     struct libnet_in6_addr src, dst;
     int c, h = 0;
     libnet_t *l;
 
-    BUG_IF(GBL_LNET->lnet_IP6 == NULL);
+    BUG_IF(EC_GBL_IFACE->lnet == NULL);
 
-    l = GBL_LNET->lnet_IP6;
+    l = EC_GBL_IFACE->lnet;
 
     SEND_LOCK;
 
@@ -723,6 +779,11 @@ int send_icmp6_echo_opt(struct ip_addr *sip, struct ip_addr *tip, u_int8* o_data
                           0);               /* ptag */
     ON_ERROR(t, -1, "libnet_build_ipv6: %s", libnet_geterror(l));
 
+   /* add the media header */
+   t = ec_build_link_layer(EC_GBL_PCAP->dlt, tmac, ETHERTYPE_IPV6, l);
+   if (t == -1)
+      FATAL_ERROR("Interface not suitable for layer2 sending");
+
     c = libnet_write(l);
     ON_ERROR(c, -1, "libnet_write: %s", libnet_geterror(l));
 
@@ -739,15 +800,15 @@ int send_icmp6_echo_opt(struct ip_addr *sip, struct ip_addr *tip, u_int8* o_data
  * macaddr parameter allows to add sender's mac address. This is an option for unicast requests.
  * See RFC4861 for more information.
  */
-int send_icmp6_nsol(struct ip_addr *sip, struct ip_addr *tip, struct ip_addr *req, u_int8 *macaddr)
+int send_L2_icmp6_nsol(struct ip_addr *sip, struct ip_addr *tip, struct ip_addr *req, u_int8 *macaddr, u_int8 *tmac)
 {  
    libnet_ptag_t t;
    int c, h = 0;
    struct libnet_in6_addr src, dst, r;
    libnet_t *l;
 
-   BUG_IF(GBL_LNET->lnet_IP6 == NULL);
-   l = GBL_LNET->lnet_IP6;
+   BUG_IF(EC_GBL_IFACE->lnet == NULL);
+   l = EC_GBL_IFACE->lnet;
 
    SEND_LOCK;
 
@@ -791,6 +852,12 @@ int send_icmp6_nsol(struct ip_addr *sip, struct ip_addr *tip, struct ip_addr *re
                          l,                                     /* handle */
                          0);                                    /* ptag */
    ON_ERROR(t, -1, "libnet_build_ipv6: %s", libnet_geterror(l));
+
+   /* add the media header */
+   t = ec_build_link_layer(EC_GBL_PCAP->dlt, tmac, ETHERTYPE_IPV6, l);
+   if (t == -1)
+      FATAL_ERROR("Interface not suitable for layer2 sending");
+
    c = libnet_write(l);
    ON_ERROR(c, -1, "libnet_write: %s", libnet_geterror(l));
 
@@ -801,7 +868,7 @@ int send_icmp6_nsol(struct ip_addr *sip, struct ip_addr *tip, struct ip_addr *re
    return c;
 }
 
-int send_icmp6_nadv(struct ip_addr *sip, struct ip_addr *tip, u_int8 *macaddr, int router)
+int send_L2_icmp6_nadv(struct ip_addr *sip, struct ip_addr *tip, u_int8 *macaddr, int router, u_int8 *tmac)
 {
    libnet_ptag_t t;
    int c, h = 0;
@@ -809,8 +876,8 @@ int send_icmp6_nadv(struct ip_addr *sip, struct ip_addr *tip, u_int8 *macaddr, i
    int flags;
    libnet_t *l;
    
-   BUG_IF(GBL_LNET->lnet_IP6 == NULL);
-   l = GBL_LNET->lnet_IP6;
+   BUG_IF(EC_GBL_IFACE->lnet == NULL);
+   l = EC_GBL_IFACE->lnet;
 
    SEND_LOCK;
 
@@ -855,6 +922,11 @@ int send_icmp6_nadv(struct ip_addr *sip, struct ip_addr *tip, u_int8 *macaddr, i
                          0);                 /* ptag */
    ON_ERROR(t, -1, "libnet_build_ipv6: %s", libnet_geterror(l));
    
+   /* add the media header */
+   t = ec_build_link_layer(EC_GBL_PCAP->dlt, tmac, ETHERTYPE_IPV6, l);
+   if (t == -1)
+      FATAL_ERROR("Interface not suitable for layer2 sending");
+
    c = libnet_write(l);
    ON_ERROR(c, -1, "libnet_write: %s", libnet_geterror(l));
 
@@ -876,8 +948,8 @@ int send_dhcp_reply(struct ip_addr *sip, struct ip_addr *tip, u_int8 *tmac, u_in
    int c;
    libnet_t *l;
    /* if not lnet warn the developer ;) */
-   BUG_IF(GBL_IFACE->lnet == 0);
-   l = GBL_IFACE->lnet;
+   BUG_IF(EC_GBL_IFACE->lnet == 0);
+   l = EC_GBL_IFACE->lnet;
   
    SEND_LOCK;
    
@@ -929,7 +1001,7 @@ int send_dhcp_reply(struct ip_addr *sip, struct ip_addr *tip, u_int8 *tmac, u_in
    libnet_toggle_checksum(l, t, LIBNET_ON);
  
    /* add the media header */
-   t = ec_build_link_layer(GBL_PCAP->dlt, tmac, ETHERTYPE_IP, l);
+   t = ec_build_link_layer(EC_GBL_PCAP->dlt, tmac, ETHERTYPE_IP, l);
    if (t == -1)
       FATAL_ERROR("Interface not suitable for layer2 sending");
    
@@ -951,7 +1023,7 @@ int send_dhcp_reply(struct ip_addr *sip, struct ip_addr *tip, u_int8 *tmac, u_in
 /*
  * send a mdns reply
  */
-int send_mdns_reply(u_int16 dport, struct ip_addr *sip, struct ip_addr *tip, u_int8 *tmac, u_int16 id, u_int8 *data, size_t datalen, u_int16 anws_rr, u_int16 auth_rr, u_int16 addi_rr)
+int send_mdns_reply(struct iface_env *iface, u_int16 dport, struct ip_addr *sip, struct ip_addr *tip, u_int8 *tmac, u_int16 id, u_int8 *data, size_t datalen, u_int16 anws_rr, u_int16 auth_rr, u_int16 addi_rr)
 {
    libnet_ptag_t t;
    int c, proto, ethertype;
@@ -959,8 +1031,8 @@ int send_mdns_reply(u_int16 dport, struct ip_addr *sip, struct ip_addr *tip, u_i
    proto = ntohs(sip->addr_type);
 
    /* if not lnet warn the developer ;) */
-   BUG_IF(GBL_IFACE->lnet == 0);
-   l = GBL_IFACE->lnet;
+   BUG_IF(iface->lnet == 0);
+   l = iface->lnet;
   
    SEND_LOCK;
 
@@ -1047,7 +1119,7 @@ int send_mdns_reply(u_int16 dport, struct ip_addr *sip, struct ip_addr *tip, u_i
    };
   
    /* add the media header */
-   t = ec_build_link_layer(GBL_PCAP->dlt, tmac, ethertype, l);
+   t = ec_build_link_layer(EC_GBL_PCAP->dlt, tmac, ethertype, l);
    if (t == -1)
       FATAL_ERROR("Interface not suitable for layer2 sending");
    
@@ -1066,7 +1138,7 @@ int send_mdns_reply(u_int16 dport, struct ip_addr *sip, struct ip_addr *tip, u_i
 /*
  * send a dns reply
  */
-int send_dns_reply(u_int16 dport, struct ip_addr *sip, struct ip_addr *tip, u_int8 *tmac, u_int16 id, u_int8 *data, size_t datalen, u_int16 anws_rr, u_int16 auth_rr, u_int16 addi_rr)
+int send_dns_reply(struct iface_env *iface, u_int16 dport, struct ip_addr *sip, struct ip_addr *tip, u_int8 *tmac, u_int16 id, u_int8 *data, size_t datalen, u_int16 anws_rr, u_int16 auth_rr, u_int16 addi_rr)
 {
    libnet_ptag_t t;
    int c, proto, ethertype;
@@ -1075,8 +1147,8 @@ int send_dns_reply(u_int16 dport, struct ip_addr *sip, struct ip_addr *tip, u_in
    proto = ntohs(sip->addr_type);
  
    /* if not lnet warn the developer ;) */
-   BUG_IF(GBL_IFACE->lnet == 0);
-   l = GBL_IFACE->lnet;
+   BUG_IF(iface->lnet == 0);
+   l = iface->lnet;
   
    SEND_LOCK;
 
@@ -1162,7 +1234,7 @@ int send_dns_reply(u_int16 dport, struct ip_addr *sip, struct ip_addr *tip, u_in
    };
   
    /* add the media header */
-   t = ec_build_link_layer(GBL_PCAP->dlt, tmac, ethertype, l);
+   t = ec_build_link_layer(EC_GBL_PCAP->dlt, tmac, ethertype, l);
    if (t == -1)
       FATAL_ERROR("Interface not suitable for layer2 sending");
    
@@ -1190,8 +1262,8 @@ int send_udp(struct ip_addr *sip, struct ip_addr *tip, u_int8 *tmac, u_int16 spo
 
    proto = ntohs(sip->addr_type);
 
-   l = GBL_IFACE->lnet;
-   BUG_IF(GBL_IFACE->lnet == 0);
+   l = EC_GBL_IFACE->lnet;
+   BUG_IF(EC_GBL_IFACE->lnet == 0);
 
    SEND_LOCK;
 
@@ -1269,7 +1341,7 @@ const uint8_t *payload, uint32_t payload_s, libnet_t *l, libnet_ptag_t ptag)
    ON_ERROR(t, -1, "libnet_build_ipvX: %s", libnet_geterror(l));
 
       /* add the media header */
-      t = ec_build_link_layer(GBL_PCAP->dlt, tmac, ethertype, l);
+      t = ec_build_link_layer(EC_GBL_PCAP->dlt, tmac, ethertype, l);
       if (t == -1)
             FATAL_ERROR("Interface not suitable for layer2 sending");
 
@@ -1295,7 +1367,7 @@ int send_tcp(struct ip_addr *sip, struct ip_addr *tip, u_int16 sport, u_int16 dp
    int c;
  
    proto = ntohs(sip->addr_type);
-   l = (proto == AF_INET) ? GBL_LNET->lnet_IP4 : GBL_LNET->lnet_IP6;   
+   l = (proto == AF_INET) ? EC_GBL_LNET->lnet_IP4 : EC_GBL_LNET->lnet_IP6;   
    /* if not lnet warn the developer ;) */
    BUG_IF(l == NULL);
   
@@ -1388,8 +1460,8 @@ int send_tcp_ether(u_int8 *dmac, struct ip_addr *sip, struct ip_addr *tip, u_int
    proto = ntohs(sip->addr_type);
 
    /* if not lnet warn the developer ;) */
-   BUG_IF(GBL_IFACE->lnet == 0);
-   l = GBL_IFACE->lnet;
+   BUG_IF(EC_GBL_IFACE->lnet == 0);
+   l = EC_GBL_IFACE->lnet;
   
    SEND_LOCK;
    
@@ -1467,7 +1539,7 @@ int send_tcp_ether(u_int8 *dmac, struct ip_addr *sip, struct ip_addr *tip, u_int
    }
    
    /* add the media header */
-   t = ec_build_link_layer(GBL_PCAP->dlt, dmac, ethertype, l);
+   t = ec_build_link_layer(EC_GBL_PCAP->dlt, dmac, ethertype, l);
    if (t == -1)
       FATAL_ERROR("Interface not suitable for layer2 sending");
  

@@ -167,13 +167,14 @@ static int hextoint(int c)
 /* 
  * convert the escaped string into a binary one
  */
-int strescape(char *dst, char *src)
+int strescape(char *dst, char *src, size_t len)
 {
    char  *olddst = dst;
+   char  *oldsrc = src;
    int   c;
    int   val;
 
-   while ((c = *src++) != '\0') {
+   while ((c = *src++) != '\0' && (size_t)(src - oldsrc) <= len) {
       if (c == '\\') {
          switch ((c = *src++)) {
             case '\0':
@@ -218,9 +219,11 @@ int strescape(char *dst, char *src)
                   if (c >= '0' && c <= '7')
                      val = (val << 3) | (c - '0');
                   else 
-                     --src;
+                     if (src > oldsrc) /* protect against buffer underflow */
+                        --src;
                } else 
-                  --src;
+                  if (src > oldsrc) /* protect against buffer underflow */
+                     --src;
                *dst++ = (char) val;
                break;
 
@@ -232,15 +235,17 @@ int strescape(char *dst, char *src)
                        c = hextoint(*src++);
                        if (c >= 0) 
                           val = (val << 4) + c;
-                       else 
-                          --src;
-               } else 
-                  --src;
+                       else if (src > oldsrc) /* protect against buffer underflow */
+                             --src;
+               } else if (src > oldsrc) /* protect against buffer underflow */
+                     --src;
                *dst++ = (char) val;
                break;
          }
-      } else if (c == 8 || c == 263)  /* the backspace */
-         dst--;
+      } else if (c == 8 || c == 263) {  /* the backspace */
+         if (dst > oldsrc) /* protect against buffer underflow */
+            dst--;
+      }
       else
          *dst++ = (char) c;
    }
@@ -411,6 +416,53 @@ char * str_tohex(u_char *bin, size_t len, char *dst, size_t dst_len)
       sprintf(dst + i*2, "%02X", bin[i]);
 
    return dst;
+}
+
+/* split ip from port */
+int ec_strsplit_ipport(char *input, char *ip, u_int16 *port)
+{
+   static char ip_tmp[MAX_ASCII_ADDR_LEN];
+
+   /* Format for IPv4: 1.2.3.4:80 */
+   if (sscanf(input, "%20[0-9.]:%hu", ip_tmp, port) == 2) {
+      strncpy(ip, ip_tmp, strlen(ip_tmp)+1);
+      return E_SUCCESS;
+   }
+
+   /* Format for IPv6: [2001:db8::1]:80 */
+   if (sscanf(input, "[%40[0-9a-fA-F:.]]:%hu", ip_tmp, port) == 2) {
+      strncpy(ip, ip_tmp, strlen(ip_tmp)+1);
+      return E_SUCCESS;
+   }
+
+   DEBUG_MSG("ec_strsplit_ipport(): error splitting ip:port: '%s'\n", input);
+   return -E_INVALID;
+}
+
+/* duplicate string in all letters lowercase */
+const char *ec_strlc(const char *input)
+{
+   char *output, *ptr;
+
+   ptr = output = strdup(input);
+   do {
+      *ptr = tolower(*ptr);
+   } while (*(ptr++) != 0);
+
+   return output;
+}
+
+/* duplicate string in all letters uppercase */
+const char *ec_struc(const char *input)
+{
+   char *output, *ptr;
+
+   ptr = output = strdup(input);
+   do {
+      *ptr = toupper(*ptr);
+   } while (*(ptr++) != 0);
+
+   return output;
 }
 
 /* EOF */

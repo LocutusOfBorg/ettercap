@@ -71,11 +71,7 @@ static pthread_mutex_t plugin_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void plugin_unload_all(void);
 static void plugin_print(char active, struct plugin_ops *ops);
-#if defined (OS_DARWIN)
-int plugin_filter(struct dirent *d);
-#else
 int plugin_filter(const struct dirent *d);
-#endif
 
 /*******************************************/
 
@@ -128,11 +124,7 @@ int plugin_load_single(const char *path, char *name)
 /*
  * filter for the scandir function
  */
-#if defined (OS_DARWIN)
-int plugin_filter(struct dirent *d)
-#else
 int plugin_filter(const struct dirent *d)
-#endif
 {
    if ( match_pattern(d->d_name, PLUGIN_PATTERN) )
       return 1;
@@ -158,13 +150,13 @@ void plugin_load_all(void)
    /* Assume .DLLs are under "<ec_root>/lib". This should be unified for
     * all; ec_get_lib_path()?
     */
-   char path[MAX_PATH];
+   char path[PATH_MAX];
 
    snprintf(path, sizeof(path), "%s%s", ec_win_get_ec_dir(), INSTALL_LIBDIR);
    where = path;
 #else
    /* default path */
-   where = INSTALL_LIBDIR "/" EC_PROGRAM;
+   where = INSTALL_LIBDIR "/" PROGRAM;
 #endif
    
    /* first search in  INSTALL_LIBDIR/ettercap" */

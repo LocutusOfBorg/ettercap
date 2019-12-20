@@ -22,7 +22,6 @@
 #include <ef.h>
 #include <ef_functions.h>
 #include <ec_filter.h>
-#include <ec_version.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -32,7 +31,7 @@
 /* protos */
 
 static void print_progress_bar(struct filter_op *fop);
-static u_char * create_data_segment(struct filter_header *fh, struct filter_op *fop, size_t n);
+static size_t create_data_segment(u_char **data, struct filter_header *fh, struct filter_op *fop, size_t n);
 static size_t add_data_segment(u_char **data, size_t base, u_char **string, size_t slen);
 
 /*******************************************/
@@ -42,8 +41,8 @@ int write_output(void)
    int fd;
    struct filter_op *fop;
    struct filter_header fh;
-   size_t ninst, i;
-   u_char *data;
+   size_t ninst, i, data_len;
+   u_char pad = 0, *data = NULL;
 
    /* conver the tree to an array of filter_op */
    ninst = compile_tree(&fop);
@@ -51,50 +50,57 @@ int write_output(void)
    if (fop == NULL)
       return -E_NOTHANDLED;
 
+   if (ninst == 0)
+      return -E_INVALID;
+
    /* create the file */
-   fd = open(GBL_OPTIONS->output_file, O_CREAT | O_RDWR | O_TRUNC | O_BINARY, 0644);
-   ON_ERROR(fd, -1, "Can't create file %s", GBL_OPTIONS->output_file);
+   fd = open(EF_GBL_OPTIONS->output_file, O_CREAT | O_RDWR | O_TRUNC | O_BINARY, 0644);
+   ON_ERROR(fd, -1, "Can't create file %s", EF_GBL_OPTIONS->output_file);
 
    /* display the message */
-   fprintf(stdout, " Writing output to \'%s\' ", GBL_OPTIONS->output_file);
-   fflush(stdout);
+   USER_MSG(" Writing output to \'%s\' ", EF_GBL_OPTIONS->output_file);
    
    /* compute the header */
    fh.magic = htons(EC_FILTER_MAGIC);
    strncpy(fh.version, EC_VERSION, sizeof(fh.version));
    fh.data = sizeof(fh);
 
-   data = create_data_segment(&fh, fop, ninst);
+   data_len = create_data_segment(&data, &fh, fop, ninst);
    
    /* write the header */
    write(fd, &fh, sizeof(struct filter_header));
 
    /* write the data segment */
-   write(fd, data, fh.code - fh.data);
+   write(fd, data, data_len);
    
+   /* write padding to next 8-byte boundary */
+   for (i = 0; i < fh.code - (fh.data + data_len); i++)
+      write(fd, &pad, 1);
+
    /* write the instructions */
-   for (i = 0; i <= ninst; i++) {
+   for (i = 0; i < ninst; i++) {
       print_progress_bar(&fop[i]);
       write(fd, &fop[i], sizeof(struct filter_op));
    }
 
    close(fd);
    
-   fprintf(stdout, " done.\n\n");
+   USER_MSG(" done.\n\n");
   
-   fprintf(stdout, " -> Script encoded into %d instructions.\n\n", (int)(i - 1));
+   USER_MSG(" -> Script encoded into %d instructions.\n\n", (int)(i - 1));
    
    return E_SUCCESS;
 }
 
 /*
- * creates the data segment into an array
- * and update the file header
+ * creates the data segment into an byte array supplied as argument data
+ * and update the file header instruction pointer 8-byte aligned
+ * 
+ * returns length of the data segment
  */
-static u_char * create_data_segment(struct filter_header *fh, struct filter_op *fop, size_t n)
+static size_t create_data_segment(u_char** data, struct filter_header *fh, struct filter_op *fop, size_t n)
 {
    size_t i, len = 0;
-   u_char *data = NULL;
 
    for (i = 0; i < n; i++) {
       
@@ -102,25 +108,25 @@ static u_char * create_data_segment(struct filter_header *fh, struct filter_op *
          case FOP_FUNC:
             if (fop[i].op.func.slen) {
                ef_debug(1, "@");
-               len += add_data_segment(&data, len, &fop[i].op.func.string, fop[i].op.func.slen);
+               len += add_data_segment(data, len, &fop[i].op.func.string, fop[i].op.func.slen);
             }
             if (fop[i].op.func.rlen) {
                ef_debug(1, "@");
-               len += add_data_segment(&data, len, &fop[i].op.func.replace, fop[i].op.func.rlen);
+               len += add_data_segment(data, len, &fop[i].op.func.replace, fop[i].op.func.rlen);
             }
             break;
             
          case FOP_TEST:
             if (fop[i].op.test.slen) {
                ef_debug(1, "@");
-               len += add_data_segment(&data, len, &fop[i].op.test.string, fop[i].op.test.slen);
+               len += add_data_segment(data, len, &fop[i].op.test.string, fop[i].op.test.slen);
             }
             break;
 
          case FOP_ASSIGN:
             if (fop[i].op.assign.slen) {
                ef_debug(1, "@");
-               len += add_data_segment(&data, len, &fop[i].op.test.string, fop[i].op.test.slen);
+               len += add_data_segment(data, len, &fop[i].op.test.string, fop[i].op.test.slen);
             }
             break;
       }
@@ -129,8 +135,12 @@ static u_char * create_data_segment(struct filter_header *fh, struct filter_op *
   
    /* where starts the code ? */
    fh->code = fh->data + len;
+   /* 8-byte aligned please */
+   if (fh->code % 8)
+      fh->code += 8 - fh->code % 8;
    
-   return data;
+   
+   return len;
 }
 
 

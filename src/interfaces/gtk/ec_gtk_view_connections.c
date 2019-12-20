@@ -27,6 +27,7 @@
 #include <ec_format.h>
 #include <ec_inject.h>
 #include <ec_proto.h>
+#include <ec_geoip.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -303,6 +304,13 @@ void gtkui_show_connections(void)
    gtk_tree_view_column_set_sort_column_id (column, 9);
    gtk_tree_view_append_column (GTK_TREE_VIEW(treeview), column);
 
+#ifdef HAVE_GEOIP
+   renderer = gtk_cell_renderer_text_new ();
+   column = gtk_tree_view_column_new_with_attributes ("Countries", renderer, "text", 10, NULL);
+   gtk_tree_view_column_set_sort_column_id (column, 10);
+   gtk_tree_view_append_column (GTK_TREE_VIEW(treeview), column);
+#endif
+
    hbox = gtkui_box_new(GTK_ORIENTATION_HORIZONTAL, 5, TRUE);
    gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 0);
    gtk_widget_show(hbox);
@@ -416,12 +424,12 @@ static gboolean refresh_connections(gpointer data)
          return(FALSE);
    } else {
       /* Columns:   Flags, Host, Port, "-",   Host, Port,
-                    Proto, State, TX Bytes, RX Bytes, (hidden) pointer */
-      ls_conns = gtk_list_store_new (11, 
+                    Proto, State, TX Bytes, RX Bytes, Countries, (hidden) pointer */
+      ls_conns = gtk_list_store_new (12,
                     G_TYPE_STRING, G_TYPE_STRING, G_TYPE_UINT, 
                     G_TYPE_STRING, G_TYPE_STRING, G_TYPE_UINT, 
                     G_TYPE_STRING, G_TYPE_STRING, G_TYPE_UINT, 
-                    G_TYPE_UINT, G_TYPE_POINTER);
+                    G_TYPE_UINT,  G_TYPE_STRING, G_TYPE_POINTER);
       connections = NULL;
    }
 
@@ -440,8 +448,7 @@ static gboolean refresh_connections(gpointer data)
               row->prev->next = row->next;
           else
               connections = row->next;
-          free(row);
-          row = NULL;
+          SAFE_FREE(row);
        }
        if(row)
            lastconn = row;
@@ -476,7 +483,7 @@ static gboolean refresh_connections(gpointer data)
    /* update visible part of list */
    do {
       /* get the conntrack pointer for this row */
-      gtk_tree_model_get (model, &iter, 10, &list, -1);
+      gtk_tree_model_get (model, &iter, 11, &list, -1);
       conntrack_get(0, list, &conn);
 
       /* extract changing values from conntrack_print string */
@@ -501,7 +508,7 @@ static gboolean refresh_connections(gpointer data)
 static struct row_pairs *gtkui_connections_add(struct conn_object *co, void *conn, struct row_pairs **list) {
    GtkTreeIter iter;
    char flags[2], src[MAX_ASCII_ADDR_LEN], dst[MAX_ASCII_ADDR_LEN];
-   char proto[4], status[8];
+   char proto[4], status[8], ccodes[8];
    unsigned int src_port = 0, dst_port = 0, tx = 0, rx = 0;
    struct row_pairs *row = NULL;
 
@@ -516,11 +523,13 @@ static struct row_pairs *gtkui_connections_add(struct conn_object *co, void *con
    memset(&src, 0, sizeof(src));
    memset(&dst, 0, sizeof(dst));
    memset(&status, 0, sizeof(status));
+   memset(&ccodes, 0, sizeof(ccodes));
 
    /* copy data from conntrack_print string */
    conntrack_flagstr(co, flags, sizeof(flags));
    conntrack_statusstr(co, status, sizeof(status));
    conntrack_protostr(co, proto, sizeof(proto));
+   conntrack_countrystr(co, ccodes, sizeof(ccodes));
 
    ip_addr_ntoa(&co->L3_addr1, src);
    ip_addr_ntoa(&co->L3_addr2, dst);
@@ -537,8 +546,7 @@ static struct row_pairs *gtkui_connections_add(struct conn_object *co, void *con
                        0, flags, 1, src,     2, src_port,
                        3, "-",   4, dst,     5, dst_port,
                        6, proto, 7, status,  8, tx,
-                       9, rx, 10, conn, -1);
-
+                       9, rx, 10, ccodes, 11, conn, -1);
    /* and add it to our linked list */
    if(!*list) {
       row = malloc(sizeof(struct row_pairs));
@@ -598,8 +606,7 @@ static void gtkui_connection_list_row(int top, struct row_pairs *pair) {
       path = gtk_tree_path_new();
       if(gtk_tree_view_get_path_at_pos(GTK_TREE_VIEW(treeview), wx+2, (top)?wy+2:wy-2, &path, NULL, NULL, NULL)) {
          gtk_tree_model_get_iter(model, &iter, path);
-         gtk_tree_model_get (model, &iter, 10, &row, -1);
-
+         gtk_tree_model_get (model, &iter, 11, &row, -1);
          pair->iter = iter;
          pair->conn = row;
       }
@@ -622,14 +629,14 @@ static void gtkui_connection_detail(void)
    char tmp[MAX_ASCII_ADDR_LEN];
    char name[MAX_HOSTNAME_LEN];
    gchar *str, *markup;
-   guint nrows = 15, ncols = 3;
+   guint nrows = 14, ncols = 3, row = 0, col = 0;
 
    DEBUG_MSG("gtk_connection_detail");
 
    model = GTK_TREE_MODEL (ls_conns);
 
    if (gtk_tree_selection_get_selected (GTK_TREE_SELECTION (selection), &model, &iter)) {
-      gtk_tree_model_get (model, &iter, 10, &c, -1);
+      gtk_tree_model_get (model, &iter, 11, &c, -1);
    } else
       return; /* nothing is selected */
 
@@ -660,102 +667,151 @@ static void gtkui_connection_detail(void)
          gtk_label_get_text(GTK_LABEL(label)));
    gtk_label_set_markup(GTK_LABEL(label), markup);
    gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-   gtk_table_attach(GTK_TABLE(table), label, 0, 3, 0, 1, GTK_FILL, GTK_FILL, 0, 0);
+   gtk_table_attach(GTK_TABLE(table), label, col, col+3, row, row+1, GTK_FILL, GTK_FILL, 0, 0);
    g_free(markup);
 
+   row++;
    label = gtk_label_new("Source MAC address:");
    gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-   gtk_table_attach(GTK_TABLE(table), label, 0, 1, 1, 2, GTK_FILL, GTK_FILL, 0, 0);
+   gtk_table_attach(GTK_TABLE(table), label, col, col+1, row, row+1, GTK_FILL, GTK_FILL, 0, 0);
 
    label = gtk_label_new(mac_addr_ntoa(c->co->L2_addr1, tmp));
    gtk_label_set_selectable(GTK_LABEL(label), TRUE);
    gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-   gtk_table_attach_defaults(GTK_TABLE(table), label, 1, 3, 1, 2);
+   gtk_table_attach_defaults(GTK_TABLE(table), label, col+1, col+3, row, row+1);
 
+   row++;
    label = gtk_label_new("Destination MAC address:");
    gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-   gtk_table_attach(GTK_TABLE(table), label, 0, 1, 2, 3, GTK_FILL, GTK_FILL, 0, 0);
+   gtk_table_attach(GTK_TABLE(table), label, col, col+1, row, row+1, GTK_FILL, GTK_FILL, 0, 0);
 
    label = gtk_label_new(mac_addr_ntoa(c->co->L2_addr2, tmp));
    gtk_label_set_selectable(GTK_LABEL(label), TRUE);
    gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-   gtk_table_attach_defaults(GTK_TABLE(table), label, 1, 3, 2, 3);
+   gtk_table_attach_defaults(GTK_TABLE(table), label, col+1, col+3, row, row+1);
 
    /* Layer 3 information */
+   row++;
    label = gtk_label_new("Layer 3 Information:");
    markup = g_markup_printf_escaped("<span weight=\"bold\">%s</span>", 
          gtk_label_get_text(GTK_LABEL(label)));
    gtk_label_set_markup(GTK_LABEL(label), markup);
    gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-   gtk_table_attach(GTK_TABLE(table), label, 0, 3, 3, 4, GTK_FILL, GTK_FILL, 0, 0);
-   gtk_table_set_row_spacing(GTK_TABLE(table), 2, 10);
+   gtk_table_attach(GTK_TABLE(table), label, col, col+3, row, row+1, GTK_FILL, GTK_FILL, 0, 0);
+   gtk_table_set_row_spacing(GTK_TABLE(table), row-1, 10);
    g_free(markup);
 
+   row++;
    label = gtk_label_new("Source IP address:");
    gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-   gtk_table_attach(GTK_TABLE(table), label, 0, 1, 4, 5, GTK_FILL, GTK_FILL, 0, 0);
+   gtk_table_attach(GTK_TABLE(table), label, col, col+1, row, row+1, GTK_FILL, GTK_FILL, 0, 0);
 
    label = gtk_label_new(ip_addr_ntoa(&c->co->L3_addr1, tmp));
    gtk_label_set_selectable(GTK_LABEL(label), TRUE);
    gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-   gtk_table_attach_defaults(GTK_TABLE(table), label, 1, 3, 4, 5);
+   gtk_table_attach_defaults(GTK_TABLE(table), label, col+1, col+3, row, row+1);
 
-   label = gtk_label_new("resolving...");
-   if (host_iptoa(&c->co->L3_addr1, name) == -E_NOMATCH) {
-      /* IP not yet resolved - keep trying asyncronously */
-      struct resolv_object *ro;
-      SAFE_CALLOC(ro, 1, sizeof(struct resolv_object));
-      ro->type = GTK_TYPE_LABEL;
-      ro->widget = label;
-      ro->ip = &c->co->L3_addr1;
-      detail_timer1 = g_timeout_add(1000, gtkui_iptoa_deferred, ro);
-   }
-   else {
-      gtk_label_set_text(GTK_LABEL(label), name);
-   }
-   gtk_label_set_selectable(GTK_LABEL(label), TRUE);
-   gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-   gtk_table_attach_defaults(GTK_TABLE(table), label, 1, 3, 5, 6);
+   if (EC_GBL_OPTIONS->resolve) {
+      row++;
+      label = gtk_label_new("Source hostname:");
+      gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
+      gtk_table_attach(GTK_TABLE(table), label, col, col+1, row, row+1, GTK_FILL, GTK_FILL, 0, 0);
 
+      label = gtk_label_new("resolving...");
+      if (host_iptoa(&c->co->L3_addr1, name) == -E_NOMATCH) {
+         /* IP not yet resolved - keep trying asyncronously */
+         struct resolv_object *ro;
+         SAFE_CALLOC(ro, 1, sizeof(struct resolv_object));
+         ro->type = GTK_TYPE_LABEL;
+         ro->widget = label;
+         ro->ip = &c->co->L3_addr1;
+         detail_timer1 = g_timeout_add(1000, gtkui_iptoa_deferred, ro);
+      }
+      else {
+         gtk_label_set_text(GTK_LABEL(label), name);
+      }
+      gtk_label_set_selectable(GTK_LABEL(label), TRUE);
+      gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
+      gtk_table_attach_defaults(GTK_TABLE(table), label, col+1, col+3, row, row+1);
+   }
+
+#ifdef HAVE_GEOIP
+   if (EC_GBL_CONF->geoip_support_enable) {
+      row++;
+      label = gtk_label_new("Source location:");
+      gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
+      gtk_table_attach(GTK_TABLE(table), label, col, col+1, row, row+1, GTK_FILL, GTK_FILL, 0, 0);
+
+      label = gtk_label_new(geoip_country_by_ip(&c->co->L3_addr1));
+      gtk_label_set_selectable(GTK_LABEL(label), TRUE);
+      gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
+      gtk_table_attach_defaults(GTK_TABLE(table), label, col+1, col+3, row, row+1);
+   }
+#endif
+
+   row++;
    label = gtk_label_new("Destination IP address:");
    gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-   gtk_table_attach(GTK_TABLE(table), label, 0, 1, 6, 7, GTK_FILL, GTK_FILL, 0, 0);
+   gtk_table_attach(GTK_TABLE(table), label, col, col+1, row, row+1, GTK_FILL, GTK_FILL, 0, 0);
 
    label = gtk_label_new(ip_addr_ntoa(&c->co->L3_addr2, tmp));
    gtk_label_set_selectable(GTK_LABEL(label), TRUE);
    gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-   gtk_table_attach_defaults(GTK_TABLE(table), label, 1, 3, 6, 7);
+   gtk_table_attach_defaults(GTK_TABLE(table), label, col+1, col+3, row, row+1);
 
-   label = gtk_label_new("resolving...");
-   if (host_iptoa(&c->co->L3_addr2, name) == -E_NOMATCH) {
-      /* IP not yet resolved - keep trying asyncronously */
-      struct resolv_object *ro;
-      SAFE_CALLOC(ro, 1, sizeof(struct resolv_object));
-      ro->type = GTK_TYPE_LABEL;
-      ro->widget = label;
-      ro->ip = &c->co->L3_addr2;
-      detail_timer2 = g_timeout_add(1000, gtkui_iptoa_deferred, ro);
+   if (EC_GBL_OPTIONS->resolve) {
+      row++;
+      label = gtk_label_new("Destination hostname:");
+      gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
+      gtk_table_attach(GTK_TABLE(table), label, col, col+1, row, row+1, GTK_FILL, GTK_FILL, 0, 0);
+
+      label = gtk_label_new("resolving...");
+      if (host_iptoa(&c->co->L3_addr2, name) == -E_NOMATCH) {
+         /* IP not yet resolved - keep trying asyncronously */
+         struct resolv_object *ro;
+         SAFE_CALLOC(ro, 1, sizeof(struct resolv_object));
+         ro->type = GTK_TYPE_LABEL;
+         ro->widget = label;
+         ro->ip = &c->co->L3_addr2;
+         detail_timer2 = g_timeout_add(1000, gtkui_iptoa_deferred, ro);
+      }
+      else {
+         gtk_label_set_text(GTK_LABEL(label), name);
+      }
+      gtk_label_set_selectable(GTK_LABEL(label), TRUE);
+      gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
+      gtk_table_attach_defaults(GTK_TABLE(table), label, col+1, col+3, row, row+1);
    }
-   else {
-      gtk_label_set_text(GTK_LABEL(label), name);
+
+#ifdef HAVE_GEOIP
+   if (EC_GBL_CONF->geoip_support_enable) {
+      row++;
+      label = gtk_label_new("Destination location:");
+      gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
+      gtk_table_attach(GTK_TABLE(table), label, col, col+1, row, row+1, GTK_FILL, GTK_FILL, 0, 0);
+
+      label = gtk_label_new(geoip_country_by_ip(&c->co->L3_addr2));
+      gtk_label_set_selectable(GTK_LABEL(label), TRUE);
+      gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
+      gtk_table_attach_defaults(GTK_TABLE(table), label, col+1, col+3, row, row+1);
    }
-   gtk_label_set_selectable(GTK_LABEL(label), TRUE);
-   gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-   gtk_table_attach_defaults(GTK_TABLE(table), label, 1, 3, 7, 8);
+#endif
 
    /* Layer 4 information */
+   row++;
    label = gtk_label_new("Layer 4 Information:");
    markup = g_markup_printf_escaped("<span weight=\"bold\">%s</span>", 
          gtk_label_get_text(GTK_LABEL(label)));
    gtk_label_set_markup(GTK_LABEL(label), markup);
    gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-   gtk_table_attach(GTK_TABLE(table), label, 0, 3, 8, 9, GTK_FILL, GTK_FILL, 0, 0);
-   gtk_table_set_row_spacing(GTK_TABLE(table), 7, 10);
+   gtk_table_attach(GTK_TABLE(table), label, col, col+3, row, row+1, GTK_FILL, GTK_FILL, 0, 0);
+   gtk_table_set_row_spacing(GTK_TABLE(table), row-1, 10);
    g_free(markup);
 
+   row++;
    label = gtk_label_new("Protocol:");
    gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-   gtk_table_attach(GTK_TABLE(table), label, 0, 1, 9, 10, GTK_FILL, GTK_FILL, 0, 0);
+   gtk_table_attach(GTK_TABLE(table), label, col, col+1, row, row+1, GTK_FILL, GTK_FILL, 0, 0);
 
    switch(c->co->L4_proto) {
       case NL_TYPE_UDP:
@@ -770,88 +826,92 @@ static void gtkui_connection_detail(void)
    }
    gtk_label_set_selectable(GTK_LABEL(label), TRUE);
    gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-   gtk_table_attach_defaults(GTK_TABLE(table), label, 1, 3, 9, 10);
+   gtk_table_attach_defaults(GTK_TABLE(table), label, col+1, col+3, row, row+1);
 
+   row++;
    label = gtk_label_new("Source port:");
    gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-   gtk_table_attach(GTK_TABLE(table), label, 0, 1, 10, 11, GTK_FILL, GTK_FILL, 0, 0);
+   gtk_table_attach(GTK_TABLE(table), label, col, col+1, row, row+1, GTK_FILL, GTK_FILL, 0, 0);
 
    label = gtk_label_new((str = g_strdup_printf("%d", ntohs(c->co->L4_addr1))));
    gtk_label_set_selectable(GTK_LABEL(label), TRUE);
    gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-   gtk_table_attach_defaults(GTK_TABLE(table), label, 1, 2, 10, 11);
+   gtk_table_attach_defaults(GTK_TABLE(table), label, col+1, col+2, row, row+1);
    g_free(str);
 
    label = gtk_label_new(service_search(c->co->L4_addr1, c->co->L4_proto));
    gtk_label_set_selectable(GTK_LABEL(label), TRUE);
    gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-   gtk_table_attach_defaults(GTK_TABLE(table), label, 2, 3, 10, 11);
+   gtk_table_attach_defaults(GTK_TABLE(table), label, col+2, col+3, row, row+1);
 
+   row++;
    label = gtk_label_new("Destination port:");
    gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-   gtk_table_attach(GTK_TABLE(table), label, 0, 1, 11, 12, GTK_FILL, GTK_FILL, 0, 0);
+   gtk_table_attach(GTK_TABLE(table), label, col, col+1, row, row+1, GTK_FILL, GTK_FILL, 0, 0);
 
    label = gtk_label_new((str = g_strdup_printf("%d", ntohs(c->co->L4_addr2))));
    gtk_label_set_selectable(GTK_LABEL(label), TRUE);
    gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-   gtk_table_attach_defaults(GTK_TABLE(table), label, 1, 2, 11, 12);
+   gtk_table_attach_defaults(GTK_TABLE(table), label, col+1, col+2, row, row+1);
    g_free(str);
 
    label = gtk_label_new(service_search(c->co->L4_addr2, c->co->L4_proto));
    gtk_label_set_selectable(GTK_LABEL(label), TRUE);
    gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-   gtk_table_attach_defaults(GTK_TABLE(table), label, 2, 3, 11, 12);
+   gtk_table_attach_defaults(GTK_TABLE(table), label, col+2, col+3, row, row+1);
 
+   row++;
    label = gtk_label_new("Transferred bytes:");
    gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-   gtk_table_attach(GTK_TABLE(table), label, 0, 1, 12, 13, GTK_FILL, GTK_FILL, 0, 0);
+   gtk_table_attach(GTK_TABLE(table), label, col, col+1, row, row+1, GTK_FILL, GTK_FILL, 0, 0);
 
    label = gtk_label_new((str = g_strdup_printf("%d", c->co->xferred)));
    gtk_label_set_selectable(GTK_LABEL(label), TRUE);
    gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-   gtk_table_attach_defaults(GTK_TABLE(table), label, 1, 3, 12, 13);
+   gtk_table_attach_defaults(GTK_TABLE(table), label, col+1, col+3, row, row+1);
    g_free(str);
 
    /* Additional information */
    if (c->co->DISSECTOR.user) {
-      gtk_table_resize(GTK_TABLE(table), nrows + 2, ncols);
-
+      row++;
       label = gtk_label_new("Additional Information:");
       markup = g_markup_printf_escaped("<span weight=\"bold\">%s</span>", 
             gtk_label_get_text(GTK_LABEL(label)));
       gtk_label_set_markup(GTK_LABEL(label), markup);
       gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-      gtk_table_attach(GTK_TABLE(table), label, 0, 3, 13, 14, GTK_FILL, GTK_FILL, 0, 0);
-      gtk_table_set_row_spacing(GTK_TABLE(table), 12, 10);
+      gtk_table_attach(GTK_TABLE(table), label, col, col+3, row, row+1, GTK_FILL, GTK_FILL, 0, 0);
+      gtk_table_set_row_spacing(GTK_TABLE(table), row-1, 10);
       g_free(markup);
 
+      row++;
       label = gtk_label_new("Account:");
       gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-      gtk_table_attach(GTK_TABLE(table), label, 0, 1, 14, 15, GTK_FILL, GTK_FILL, 0, 0);
+      gtk_table_attach(GTK_TABLE(table), label, col, col+1, row, row+1, GTK_FILL, GTK_FILL, 0, 0);
 
       label = gtk_label_new(c->co->DISSECTOR.user);
       gtk_label_set_selectable(GTK_LABEL(label), TRUE);
       gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-      gtk_table_attach_defaults(GTK_TABLE(table), label, 1, 2, 14, 15);
+      gtk_table_attach_defaults(GTK_TABLE(table), label, col+1, col+2, row, row+1);
 
       label = gtk_label_new(c->co->DISSECTOR.pass);
       gtk_label_set_selectable(GTK_LABEL(label), TRUE);
       gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-      gtk_table_attach_defaults(GTK_TABLE(table), label, 2, 3, 14, 15);
+      gtk_table_attach_defaults(GTK_TABLE(table), label, col+2, col+3, row, row+1);
 
       if (c->co->DISSECTOR.info) {
-         gtk_table_resize(GTK_TABLE(table), nrows + 3, ncols);
          label = gtk_label_new("Additional info:");
          gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-         gtk_table_attach(GTK_TABLE(table), label, 0, 1, 15, 16, GTK_FILL, GTK_FILL, 0, 0);
+         gtk_table_attach(GTK_TABLE(table), label, col, col+1, row, row+1, GTK_FILL, GTK_FILL, 0, 0);
 
          label = gtk_label_new(c->co->DISSECTOR.info);
          gtk_label_set_selectable(GTK_LABEL(label), TRUE);
          gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
-         gtk_table_attach_defaults(GTK_TABLE(table), label, 1, 3, 15, 16);
+         gtk_table_attach_defaults(GTK_TABLE(table), label, col+1, col+3, row, row+1);
       }
    }
 
+   /* resize table to the acutal size */
+   gtk_table_resize(GTK_TABLE(table), row, ncols);
 
    hbox = gtkui_box_new(GTK_ORIENTATION_HORIZONTAL, 0, FALSE);
    gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 0);
@@ -892,7 +952,7 @@ static void gtkui_connection_data(void)
    model = GTK_TREE_MODEL (ls_conns);
 
    if (gtk_tree_selection_get_selected (GTK_TREE_SELECTION (selection), &model, &iter)) {
-      gtk_tree_model_get (model, &iter, 10, &c, -1);
+      gtk_tree_model_get (model, &iter, 11, &c, -1);
    } else
       return; /* nothing is selected */
 
@@ -1181,8 +1241,8 @@ static void split_print(u_char *text, size_t len, struct ip_addr *L3_src)
    int ret;
    
    /* check the regex filter */
-   if (GBL_OPTIONS->regex && 
-       regexec(GBL_OPTIONS->regex, text, 0, NULL, 0) != 0) {
+   if (EC_GBL_OPTIONS->regex && 
+       regexec(EC_GBL_OPTIONS->regex, text, 0, NULL, 0) != 0) {
       return;
    }
 
@@ -1190,7 +1250,7 @@ static void split_print(u_char *text, size_t len, struct ip_addr *L3_src)
    SAFE_REALLOC(dispbuf, hex_len(len) * sizeof(u_char) + 1);
    
    /* format the data */
-   ret = GBL_FORMAT(text, len, dispbuf);
+   ret = EC_GBL_FORMAT(text, len, dispbuf);
    dispbuf[ret] = 0;
 
    if (!ip_addr_cmp(L3_src, &curr_conn->L3_addr1))
@@ -1208,8 +1268,8 @@ static void split_print_po(struct packet_object *po)
       return;
    
    /* check the regex filter */
-   if (GBL_OPTIONS->regex && 
-       regexec(GBL_OPTIONS->regex, po->DATA.disp_data, 0, NULL, 0) != 0) {
+   if (EC_GBL_OPTIONS->regex && 
+       regexec(EC_GBL_OPTIONS->regex, po->DATA.disp_data, 0, NULL, 0) != 0) {
       return;
    }
    
@@ -1217,7 +1277,7 @@ static void split_print_po(struct packet_object *po)
    SAFE_REALLOC(dispbuf, hex_len(po->DATA.disp_len) * sizeof(u_char) + 1);
       
    /* format the data */
-   ret = GBL_FORMAT(po->DATA.disp_data, po->DATA.disp_len, dispbuf);
+   ret = EC_GBL_FORMAT(po->DATA.disp_data, po->DATA.disp_len, dispbuf);
    dispbuf[ret] = 0;
         
    if (!ip_addr_cmp(&po->L3.src, &curr_conn->L3_addr1))
@@ -1352,8 +1412,8 @@ static void join_print(u_char *text, size_t len, struct ip_addr *L3_src)
    int ret;
    
    /* check the regex filter */
-   if (GBL_OPTIONS->regex && 
-       regexec(GBL_OPTIONS->regex, text, 0, NULL, 0) != 0) {
+   if (EC_GBL_OPTIONS->regex && 
+       regexec(EC_GBL_OPTIONS->regex, text, 0, NULL, 0) != 0) {
       return;
    }
    
@@ -1361,7 +1421,7 @@ static void join_print(u_char *text, size_t len, struct ip_addr *L3_src)
    SAFE_REALLOC(dispbuf, hex_len(len) * sizeof(u_char) + 1);
    
    /* format the data */
-   ret = GBL_FORMAT(text, len, dispbuf);
+   ret = EC_GBL_FORMAT(text, len, dispbuf);
    dispbuf[ret] = 0;
    
    if (!ip_addr_cmp(L3_src, &curr_conn->L3_addr1))
@@ -1379,8 +1439,8 @@ static void join_print_po(struct packet_object *po)
       return;
    
    /* check the regex filter */
-   if (GBL_OPTIONS->regex && 
-       regexec(GBL_OPTIONS->regex, po->DATA.disp_data, 0, NULL, 0) != 0) {
+   if (EC_GBL_OPTIONS->regex && 
+       regexec(EC_GBL_OPTIONS->regex, po->DATA.disp_data, 0, NULL, 0) != 0) {
       return;
    }
    
@@ -1388,7 +1448,7 @@ static void join_print_po(struct packet_object *po)
    SAFE_REALLOC(dispbuf, hex_len(po->DATA.disp_len) * sizeof(u_char) + 1);
       
    /* format the data */
-   ret = GBL_FORMAT(po->DATA.disp_data, po->DATA.disp_len, dispbuf);
+   ret = EC_GBL_FORMAT(po->DATA.disp_data, po->DATA.disp_len, dispbuf);
    dispbuf[ret] = 0;
         
    if (!ip_addr_cmp(&po->L3.src, &curr_conn->L3_addr1))
@@ -1412,7 +1472,7 @@ static void gtkui_connection_purge(void *conn)
    connections = NULL;
    for(row = list; row; row = nextrow) {
        nextrow = row->next;
-       free(row);
+       SAFE_FREE(row);
    }
 
    conntrack_purge();
@@ -1436,7 +1496,7 @@ static void gtkui_connection_kill(void *conn)
    model = GTK_TREE_MODEL (ls_conns);
 
    if (gtk_tree_selection_get_selected (GTK_TREE_SELECTION (selection), &model, &iter)) {
-      gtk_tree_model_get (model, &iter, 10, &c, -1);
+      gtk_tree_model_get (model, &iter, 11, &c, -1);
    } else
       return; /* nothing is selected */
 
@@ -1567,7 +1627,7 @@ static void gtkui_inject_user(int side)
    size_t len;
     
    /* escape the sequnces in the buffer */
-   len = strescape(injectbuf, injectbuf);
+   len = strescape(injectbuf, injectbuf, strlen(injectbuf)+1);
 
    /* check where to inject */
    if (side == 1 || side == 2) {
@@ -1729,7 +1789,7 @@ static gboolean connfilter(GtkTreeModel *model, GtkTreeIter *iter, gpointer *dat
    (void) data;
 
    /* fetch row values */
-   gtk_tree_model_get(model, iter, 1, &src_host, 4, &dst_host, 10, &conn, -1);
+   gtk_tree_model_get(model, iter, 1, &src_host, 4, &dst_host, 11, &conn, -1);
 
    /* evaluate filter criteria */
    /* host filter set - filter hosts that do not match */

@@ -99,20 +99,25 @@ int encode_const(char *string, struct filter_op *fop)
       
    /* it is an ip address */
    } else if (string[0] == '\'' && string[strlen(string) - 1] == '\'') {
-      struct in_addr ipaddr;
-      struct in6_addr ip6addr;
+      struct ip_addr ipaddr;
       
       /* remove the single quote */
       p = strchr(string + 1, '\'');
       *p = '\0';
 
-      if (inet_pton(AF_INET, string + 1, &ipaddr) == 1) { /* try IPv4 */
-         /* 4-bytes - handle as a integer */
-         fop->op.test.value = ntohl(ipaddr.s_addr);
-      }
-      else if (inet_pton(AF_INET6, string + 1, &ip6addr) == 1) { /* try IPv6 */
-         /* 16-bytes - handle as a byte pointer */
-         memcpy(&fop->op.test.ipaddr, &ip6addr.s6_addr, 16);
+      if (ip_addr_pton(string + 1, &ipaddr) == E_SUCCESS) {
+         switch (ntohs(ipaddr.addr_type)) {
+            case AF_INET:
+               /* 4-bytes - handle as a integer */
+               fop->op.test.value = ntohl(ipaddr.addr32[0]);
+               break;
+            case AF_INET6:
+               /* 16-bytes - handle as a byte pointer */
+               ip_addr_cpy((u_char*)&fop->op.test.ipaddr, &ipaddr);
+               break;
+            default:
+               return -E_FATAL;
+         }
       }
       else {
          return -E_FATAL;
@@ -131,7 +136,8 @@ int encode_const(char *string, struct filter_op *fop)
       fop->op.test.string = (u_char*)strdup(string + 1);
          
       /* escape it in the structure */
-      fop->op.test.slen = strescape((char*)fop->op.test.string, (char*)fop->op.test.string);
+      fop->op.test.slen = strescape((char*)fop->op.test.string, 
+            (char*)fop->op.test.string, strlen(fop->op.test.string)+1);
      
       return E_SUCCESS;
       
@@ -179,7 +185,8 @@ int encode_function(char *string, struct filter_op *fop)
             fop->opcode = FOP_FUNC;
             fop->op.func.op = FFUNC_SEARCH;
             fop->op.func.string = (u_char*)strdup(dec_args[1]);
-            fop->op.func.slen = strescape((char*)fop->op.func.string, (char*)fop->op.func.string);
+            fop->op.func.slen = strescape((char*)fop->op.func.string, 
+                  (char*)fop->op.func.string, strlen(fop->op.func.string)+1);
             ret = E_SUCCESS;
          } else
             SCRIPT_ERROR("Unknown offset %s ", dec_args[0]);
@@ -197,7 +204,8 @@ int encode_function(char *string, struct filter_op *fop)
             fop->opcode = FOP_FUNC;
             fop->op.func.op = FFUNC_REGEX;
             fop->op.func.string = (u_char*)strdup(dec_args[1]);
-            fop->op.func.slen = strescape((char*)fop->op.func.string, (char*)fop->op.func.string);
+            fop->op.func.slen = strescape((char*)fop->op.func.string, 
+                  (char*)fop->op.func.string, strlen(fop->op.func.string)+1);
             ret = E_SUCCESS;
          } else
             SCRIPT_ERROR("Unknown offset %s ", dec_args[0]);
@@ -267,9 +275,11 @@ int encode_function(char *string, struct filter_op *fop)
          /* replace always operate at DATA level */
          fop->op.func.level = 5;
          fop->op.func.string = (u_char*)strdup(dec_args[0]);
-         fop->op.func.slen = strescape((char*)fop->op.func.string, (char*)fop->op.func.string);
+         fop->op.func.slen = strescape((char*)fop->op.func.string, 
+               (char*)fop->op.func.string, strlen(fop->op.func.string)+1);
          fop->op.func.replace = (u_char*)strdup(dec_args[1]);
-         fop->op.func.rlen = strescape((char*)fop->op.func.replace, (char*)fop->op.func.replace);
+         fop->op.func.rlen = strescape((char*)fop->op.func.replace, 
+               (char*)fop->op.func.replace, strlen(fop->op.func.replace)+1);
          ret = E_SUCCESS;
       } else
          SCRIPT_ERROR("Wrong number of arguments for function \"%s\" ", name);
@@ -323,7 +333,8 @@ int encode_function(char *string, struct filter_op *fop)
       if (nargs == 1) {
          fop->op.func.op = FFUNC_MSG;
          fop->op.func.string = (u_char*)strdup(dec_args[0]);
-         fop->op.func.slen = strescape((char*)fop->op.func.string, (char*)fop->op.func.string);
+         fop->op.func.slen = strescape((char*)fop->op.func.string, 
+               (char*)fop->op.func.string, strlen(fop->op.func.string)+1);
          ret = E_SUCCESS;
       } else
          SCRIPT_ERROR("Wrong number of arguments for function \"%s\" ", name);
