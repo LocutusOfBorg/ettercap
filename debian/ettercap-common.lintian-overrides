@@ -1,3 +1,12 @@
 # We install libettercap.so.0 which is for private use
 ettercap-common: package-name-doesnt-match-sonames libettercap0
 ettercap-common: non-dev-pkg-with-shlib-symlink usr/lib/libettercap.so.0.8.3 usr/lib/libettercap.so
+# we really don't use libc functions for plugins
+ettercap-common: library-not-linked-against-libc usr/lib/ettercap/ec_dummy.so
+ettercap-common: library-not-linked-against-libc usr/lib/ettercap/ec_fraggle_attack.so
+ettercap-common: library-not-linked-against-libc usr/lib/ettercap/ec_link_type.so
+ettercap-common: library-not-linked-against-libc usr/lib/ettercap/ec_pptp_clear.so
+ettercap-common: library-not-linked-against-libc usr/lib/ettercap/ec_reply_arp.so
+ettercap-common: library-not-linked-against-libc usr/lib/ettercap/ec_repoison_arp.so
+ettercap-common: library-not-linked-against-libc usr/lib/ettercap/ec_smurf_attack.so
+ettercap-common: library-not-linked-against-libc usr/lib/ettercap/ec_stp_mangler.so
