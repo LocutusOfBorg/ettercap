@@ -123,7 +123,8 @@ static int wdg_file_destroy(struct wdg_object *wo)
    delwin(ww->win);
    
    /* restore the initial working directory */
-   chdir(ww->initpath);
+   if (chdir(ww->initpath) == -1)
+       WARN_MSG("chdir failed: %s", strerror(errno));
 
    WDG_SAFE_FREE(wo->extend);
 
@@ -394,7 +395,8 @@ static int wdg_file_driver(struct wdg_object *wo, int key, struct wdg_mouse_even
       stat(item_name(current_item(ww->m)), &buf);
       /* if it is a directory, change to it */
       if (S_ISDIR(buf.st_mode)) {
-         chdir(item_name(current_item(ww->m)));
+         if (chdir(item_name(current_item(ww->m))) == -1)
+             WARN_MSG("chdir failed: %s", strerror(errno));
          return -WDG_E_NOTHANDLED;
       } else {
          /* invoke the callback and return */
@@ -480,8 +482,8 @@ static void wdg_file_menu_create(struct wdg_object *wo)
           * transform the current dir into the root.
           * useful to exit from a path whose parent is not readable 
           */
-         if (!strcmp(ww->namelist[i]->d_name, ".")) {
-            strncpy(ww->namelist[i]->d_name, "/", 1);
+         if (*ww->namelist[i]->d_name == '.') {
+            *ww->namelist[i]->d_name = '/';
             ww->nitems++;
             WDG_SAFE_REALLOC(ww->items, ww->nitems * sizeof(ITEM *));
             ww->items[ww->nitems - 1] = new_item(ww->namelist[i]->d_name, "root");

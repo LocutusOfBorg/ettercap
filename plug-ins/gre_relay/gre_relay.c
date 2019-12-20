@@ -49,8 +49,34 @@ struct ip_header {
 /*The options start here. */
 };
 
+
+#ifdef WITH_IPV6
+struct ip6_header {
+#ifndef WORDS_BIGENDIAN
+   u_int8   version:4;
+   u_int8   priority:4;
+#else
+   u_int8   priority:4;
+   u_int8   version:4;
+#endif
+   u_int8   flow_lbl[3];
+   u_int16  payload_len;
+   u_int8   next_hdr;
+   u_int8   hop_limit;
+
+   u_int8   saddr[IP6_ADDR_LEN];
+   u_int8   daddr[IP6_ADDR_LEN];
+};
+
+struct icmp6_nsol {
+   u_int32 res;
+   u_int8 target[IP6_ADDR_LEN];
+};
+#endif
+
+
 /* globals */
-struct in_addr fake_ip;
+struct ip_addr fake_ip;
 
 /* protos */
 int plugin_load(void *);
@@ -59,6 +85,10 @@ static int gre_relay_fini(void *);
 
 static void parse_gre(struct packet_object *po);
 static void parse_arp(struct packet_object *po);
+
+#ifdef WITH_IPV6
+static void parse_nd(struct packet_object *po);
+#endif
 
 /* plugin operations */
 struct plugin_ops gre_relay_ops = { 
@@ -69,7 +99,7 @@ struct plugin_ops gre_relay_ops = {
     /* a short description of the plugin (max 50 chars) */                    
    .info =              "Tunnel broker for redirected GRE tunnels",  
    /* the plugin version. */ 
-   .version =           "1.0",   
+   .version =           "1.1",   
    /* activation function */
    .init =              &gre_relay_init,
    /* deactivation function */                     
@@ -94,18 +124,20 @@ static int gre_relay_init(void *dummy)
    (void) dummy;
 
    /* It doesn't work if unoffensive */
-   if (GBL_OPTIONS->unoffensive) {
+   if (EC_GBL_OPTIONS->unoffensive) {
       INSTANT_USER_MSG("gre_relay: plugin doesn't work in UNOFFENSIVE mode\n");
       return PLUGIN_FINISHED;
    }
 
    /* don't display messages while operating */
-   GBL_OPTIONS->quiet = 1;
+   EC_GBL_OPTIONS->quiet = 1;
 
    memset(tmp, 0, sizeof(tmp));
    
    ui_input("Unused IP address: ", tmp, sizeof(tmp), NULL);
-   if (!inet_aton(tmp, &fake_ip)) {
+
+   /* convert IP string into ip_addr struct */
+   if (ip_addr_pton(tmp, &fake_ip) != E_SUCCESS) {
       INSTANT_USER_MSG("gre_relay: Bad IP address\n");
       return PLUGIN_FINISHED;
    }
@@ -114,6 +146,9 @@ static int gre_relay_init(void *dummy)
    
    hook_add(HOOK_PACKET_GRE, &parse_gre);
    hook_add(HOOK_PACKET_ARP_RQ, &parse_arp);
+#ifdef WITH_IPV6
+   hook_add(HOOK_PACKET_ICMP6_NSOL, &parse_nd);
+#endif
 
    return PLUGIN_RUNNING;      
 }
@@ -128,6 +163,9 @@ static int gre_relay_fini(void *dummy)
 
    hook_del(HOOK_PACKET_GRE, &parse_gre);
    hook_del(HOOK_PACKET_ARP_RQ, &parse_arp);
+#ifdef WITH_IPV6
+   hook_del(HOOK_PACKET_ICMP6_NSOL, &parse_nd);
+#endif
 
    return PLUGIN_FINISHED;
 }
@@ -138,23 +176,42 @@ static int gre_relay_fini(void *dummy)
 static void parse_gre(struct packet_object *po)
 {
    struct ip_header *iph;
+#ifdef WITH_IPV6
+   struct ip6_header *ip6h;
+#endif
       
    /* Chek if this is a packet for our fake host */
    if (!(po->flags & PO_FORWARDABLE)) 
       return; 
 
-   if ( (iph = (struct ip_header *)po->L3.header) == NULL)
+   if ( ip_addr_cmp(&po->L3.dst, &fake_ip) )
       return;
       
-   if ( iph->daddr != fake_ip.s_addr )
+   if ( po->L3.header == NULL)
       return;
-      
+
    /* Switch source and dest IP address */
-   iph->daddr = iph->saddr;
-   iph->saddr = fake_ip.s_addr;
+   switch (ntohs(po->L3.dst.addr_type)) {
+      case AF_INET:
+         iph = (struct ip_header*)po->L3.header;
+         iph->daddr = iph->saddr;
+         iph->saddr = fake_ip.addr32[0];
+         /* Increase ttl */
+         iph->ttl = 128;
+         break;
+#ifdef WITH_IPV6
+      case AF_INET6:
+         ip6h = (struct ip6_header*)po->L3.header;
+         ip_addr_cpy(ip6h->daddr, &po->L3.src);
+         ip_addr_cpy(ip6h->saddr, &fake_ip);
+         /* Increase ttl */
+         ip6h->hop_limit = 128;
+         break;
+#endif
+      default:
+         return;
+   }
    
-   /* Increase ttl */
-   iph->ttl = 128;
 
    po->flags |= PO_MODIFIED;
 }
@@ -163,12 +220,24 @@ static void parse_gre(struct packet_object *po)
 /* Reply to requests for our fake host */
 static void parse_arp(struct packet_object *po)
 {
-   struct ip_addr sa;
-   
-   ip_addr_init(&sa, AF_INET, (u_char *)&(fake_ip.s_addr));
-   if (!ip_addr_cmp(&sa, &po->L3.dst))
-      send_arp(ARPOP_REPLY, &sa, GBL_IFACE->mac, &po->L3.src, po->L2.src);
+   if (!ip_addr_cmp(&fake_ip, &po->L3.dst))
+      send_arp(ARPOP_REPLY, &fake_ip, EC_GBL_IFACE->mac, &po->L3.src, po->L2.src);
 }
+
+#ifdef WITH_IPV6
+/* Reply to requests for our IPv6 fake host */
+static void parse_nd(struct packet_object *po)
+{
+   struct icmp6_nsol* nsol;
+   struct ip_addr target;
+
+   nsol = (struct icmp6_nsol*)po->L4.options;
+   ip_addr_init(&target, AF_INET6, (u_char*)nsol->target);
+
+   if (!ip_addr_cmp(&fake_ip, &target))
+      send_L2_icmp6_nadv(&fake_ip, &po->L3.src, EC_GBL_IFACE->mac, 0, po->L2.src);
+}
+#endif
 
 /* EOF */
 

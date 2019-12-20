@@ -128,23 +128,23 @@ int set_regex(char *regex)
    DEBUG_MSG("set_regex: %s", regex);
 
    /* free any previous compilation */
-   if (GBL_OPTIONS->regex)
-      regfree(GBL_OPTIONS->regex);
+   if (EC_GBL_OPTIONS->regex)
+      regfree(EC_GBL_OPTIONS->regex);
 
    /* unset the regex if empty */
    if (!strcmp(regex, "")) {
-      SAFE_FREE(GBL_OPTIONS->regex);
+      SAFE_FREE(EC_GBL_OPTIONS->regex);
       return E_SUCCESS;
    }
   
    /* allocate the new structure */
-   SAFE_CALLOC(GBL_OPTIONS->regex, 1, sizeof(regex_t));
+   SAFE_CALLOC(EC_GBL_OPTIONS->regex, 1, sizeof(regex_t));
   
    /* compile the regex */
-   err = regcomp(GBL_OPTIONS->regex, regex, REG_EXTENDED | REG_NOSUB | REG_ICASE );
+   err = regcomp(EC_GBL_OPTIONS->regex, regex, REG_EXTENDED | REG_NOSUB | REG_ICASE );
 
    if (err) {
-      regerror(err, GBL_OPTIONS->regex, errbuf, sizeof(errbuf));
+      regerror(err, EC_GBL_OPTIONS->regex, errbuf, sizeof(errbuf));
       FATAL_MSG("%s\n", errbuf);
    }
 
@@ -210,20 +210,20 @@ void drop_privs(void)
    /* get the env variable for the UID to drop privs to */
    var = getenv("EC_UID");
 
-   /* if the EC_UID variable is not set, default to GBL_CONF->ec_uid (nobody) */
+   /* if the EC_UID variable is not set, default to EC_GBL_CONF->ec_uid (nobody) */
    if (var != NULL)
       uid = atoi(var);
    else
-      uid = GBL_CONF->ec_uid;
+      uid = EC_GBL_CONF->ec_uid;
 
    /* get the env variable for the GID to drop privs to */
    var = getenv("EC_GID");
 
-   /* if the EC_UID variable is not set, default to GBL_CONF->ec_gid (nobody) */
+   /* if the EC_UID variable is not set, default to EC_GBL_CONF->ec_gid (nobody) */
    if (var != NULL)
       gid = atoi(var);
    else
-      gid = GBL_CONF->ec_gid;
+      gid = EC_GBL_CONF->ec_gid;
 
    reset_logfile_owners(geteuid(), getegid(), uid, gid);
 
@@ -263,8 +263,7 @@ int base64decode(const char *src, char **outptr)
    int decodeLen = get_decode_len(src);
    char *dst;
 
-   *outptr = (char *)malloc(decodeLen);
-   memset(*outptr, '\0', decodeLen);
+   SAFE_CALLOC(*outptr, decodeLen, sizeof(char));
 
    dst = *outptr;
    unsigned int sizeof_array = (sizeof(map2) / sizeof(map2[0]));
@@ -293,8 +292,8 @@ int base64encode(const char *inputbuff, char **outptr)
    unsigned i_bits = 0;
    int i_shift = 0;
    int bytes_remaining = strlen(inputbuff);
-   *outptr = (char *)malloc(bytes_remaining*4/3+4);
-   memset(*outptr, '\0', bytes_remaining*4/3+4); 
+
+   SAFE_CALLOC(*outptr, bytes_remaining*4/3+4, sizeof(char));
 
    ret = dst = *outptr;
    while(bytes_remaining) {
@@ -341,13 +340,17 @@ const char *ec_ctime(const struct timeval *tv)
    if (ts_str)
       sprintf(result, "%.24s", ts_str);
    else
+#if defined OS_DARWIN
+      snprintf(result, sizeof(result), "%lu.%06d", (unsigned long)tv->tv_sec, tv->tv_usec);
+#else
       snprintf(result, sizeof(result), "%lu.%06lu", (unsigned long)tv->tv_sec, tv->tv_usec);
+#endif
 
   return (result);
 }
+
 
 /* EOF */
 
 
 // vim:ts=3:expandtab
-

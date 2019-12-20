@@ -22,6 +22,8 @@
 #include <ec.h>
 #include <ec_version.h>
 #include <ec_globals.h>
+#include <ec_conf.h>
+#include <ec_libettercap.h>
 #include <ec_network.h>
 #include <ec_signals.h>
 #include <ec_parser.h>
@@ -32,12 +34,12 @@
 #include <ec_plugins.h>
 #include <ec_format.h>
 #include <ec_fingerprint.h>
+#include <ec_geoip.h>
 #include <ec_manuf.h>
 #include <ec_services.h>
 #include <ec_http.h>
 #include <ec_scan.h>
 #include <ec_ui.h>
-#include <ec_conf.h>
 #include <ec_mitm.h>
 #include <ec_sslwrap.h>
 #include <ec_utils.h>
@@ -46,7 +48,6 @@
 #endif
 
 /* global vars */
-
 
 /* protos */
 
@@ -61,14 +62,9 @@ int main(int argc, char *argv[])
     * We can access these structs via the macro in ec_globals.h
     */
         
-   globals_alloc();
-  
-   GBL_PROGRAM = strdup(EC_PROGRAM);
-   GBL_VERSION = strdup(EC_VERSION);
-   SAFE_CALLOC(GBL_DEBUG_FILE, strlen(EC_PROGRAM) + strlen("-") + strlen(EC_VERSION) + strlen("_debug.log") + 1, sizeof(char));
-   sprintf(GBL_DEBUG_FILE, "%s-%s_debug.log", GBL_PROGRAM, EC_VERSION);
-   
-   DEBUG_INIT();
+   libettercap_init(PROGRAM, EC_VERSION);
+   libettercap_load_conf();
+
    DEBUG_MSG("main -- here we go !!");
 
    /* initialize the filter mutex */
@@ -81,11 +77,11 @@ int main(int argc, char *argv[])
    signal_handler();
    
 #ifdef OS_GNU
-  fprintf(stdout,"%s is still not fully supported in this OS because of missing live capture support.", GBL_PROGRAM);
+  fprintf(stdout,"%s is still not fully supported in this OS because of missing live capture support.", EC_GBL_PROGRAM);
 #endif
    /* ettercap copyright */
    fprintf(stdout, "\n" EC_COLOR_BOLD "%s %s" EC_COLOR_END " copyright %s %s\n\n", 
-         GBL_PROGRAM, GBL_VERSION, EC_COPYRIGHT, EC_AUTHORS);
+         EC_GBL_PROGRAM, EC_GBL_VERSION, EC_COPYRIGHT, EC_AUTHORS);
    
    /* getopt related parsing...  */
    parse_options(argc, argv);
@@ -93,9 +89,6 @@ int main(int argc, char *argv[])
    /* check the date */
    time_check();
 
-   /* load the configuration file */
-   load_conf();
-  
    /* 
     * get the list of available interfaces 
     * 
@@ -106,16 +99,22 @@ int main(int argc, char *argv[])
    capture_getifs();
    
    /* initialize the user interface */
-   ui_init();
+   libettercap_ui_init();
    
    /* initialize the network subsystem */
    network_init();
    
+#ifdef HAVE_GEOIP
+   /* initialize the GeoIP API */
+   if (EC_GBL_CONF->geoip_support_enable)
+      geoip_init();
+#endif
+
    /* 
     * always disable the kernel ip forwarding (except when reading from file).
     * the forwarding will be done by ettercap.
     */
-   if(!GBL_OPTIONS->read && !GBL_OPTIONS->unoffensive && !GBL_OPTIONS->only_mitm) {
+   if(!EC_GBL_OPTIONS->read && !EC_GBL_OPTIONS->unoffensive && !EC_GBL_OPTIONS->only_mitm) {
 #ifdef WITH_IPV6
       /*
        * disable_ipv6_forward() registers the restore function with atexit() 
@@ -129,16 +128,16 @@ int main(int argc, char *argv[])
       disable_ip_forward();
 	
 #ifdef OS_LINUX
-      if (!GBL_OPTIONS->read)
+      if (!EC_GBL_OPTIONS->read)
       	disable_interface_offload();
 #endif
       /* binds ports and set redirect for ssl wrapper */
-      if(GBL_SNIFF->type == SM_UNIFIED && GBL_OPTIONS->ssl_mitm)
+      if(EC_GBL_SNIFF->type == SM_UNIFIED && EC_GBL_OPTIONS->ssl_mitm)
          ssl_wrap_init();
 
 #if defined OS_LINUX && defined WITH_IPV6
       /* check if privacy extensions are enabled */
-      check_tempaddr(GBL_OPTIONS->iface);
+      check_tempaddr(EC_GBL_OPTIONS->iface);
 #endif
    }
    
@@ -175,10 +174,10 @@ int main(int argc, char *argv[])
 #endif
 
    /* set the encoding for the UTF-8 visualization */
-   set_utf8_encoding((u_char*)GBL_CONF->utf8_encoding);
+   set_utf8_encoding((u_char*)EC_GBL_CONF->utf8_encoding);
   
    /* print all the buffered messages */
-   if (GBL_UI->type == UI_TEXT)
+   if (EC_GBL_UI->type == UI_TEXT)
       USER_MSG("\n");
    
    ui_msg_flush(MSG_ALL);
@@ -189,22 +188,22 @@ int main(int argc, char *argv[])
     * we are interested only in the mitm attack i
     * if entered, this function will not return...
     */
-   if (GBL_OPTIONS->only_mitm)
+   if (EC_GBL_OPTIONS->only_mitm)
       only_mitm();
    
    /* create the dispatcher thread */
    ec_thread_new("top_half", "dispatching module", &top_half, NULL);
 
    /* this thread becomes the UI then displays it */
-   ec_thread_register(EC_PTHREAD_SELF, GBL_PROGRAM, "the user interface");
+   ec_thread_register(EC_PTHREAD_SELF, EC_GBL_PROGRAM, "the user interface");
 
    /* start unified sniffing for curses and GTK at startup */
-   if ((GBL_UI->type == UI_CURSES || GBL_UI->type == UI_GTK) &&
-         GBL_CONF->sniffing_at_startup)
-      EXECUTE(GBL_SNIFF->start);
+   if ((EC_GBL_UI->type == UI_CURSES || EC_GBL_UI->type == UI_GTK) &&
+         EC_GBL_CONF->sniffing_at_startup)
+      EXECUTE(EC_GBL_SNIFF->start);
 
    /* start the actual user interface */
-   ui_start();
+   libettercap_ui_start();
 
 /******************************************** 
  * reached only when the UI is shutted down 
@@ -231,16 +230,16 @@ static void time_check(void)
    "\n*\n^1U4Mm\x04wW#K\x2e\x0e+X\x7f\f,N'U!I-L5?";struct{char X5T[7];int dMG;
    int U4M;} X5T[]={{"N!WwFr", 0x414c6f52,0},{"S6FfUe", 0x4e614741,0}};sprintf
    (G5P,"%s",ctime(&K9));o+=4;O=strchr(o+4,' ');*O=0; for(U4M=(1<<5)-(1<<2)+1;
-   U4M>0;U4M--)dMG[U4M]=dMG[U4M]^dMG[U4M-1];for(U4M=0;U4M<sizeof(X5T)/sizeof(*
-   X5T);U4M++){for(_=(1<<2)+1; _>0;_--)X5T[U4M].X5T[_]=X5T[U4M].X5T[_]^X5T[U4M
-   ].X5T[_-1];if(!strcmp(X5T[U4M].X5T,o)){char T0Q[]="\n\0O!M4\x14r\x1doO;T0Q"
-   "(\bm\x19m\bz\x19x\b(A2\x12s\x1d=X5T=Q&G5Pp\x03l\n~\th\x1a\x7f_dMG\x06hH-@"
-   "!H$\x04s\x1av\x1a:X=\x1d|\f|\x0ek\ba\0t\x11u[u[{^-m\fb\x16\x7f\x19v\x04oA"
-   "\x2e\\;1;K9\\/\\|9w#f4\x1a\x34\x1a\x1a";for(_=(1<<7)-(1<<3)-(1<<2)+1;_>0;_
-   --)T0Q[_]=T0Q[_]^T0Q[_-1];write(1,dMG,1);while(__++<1<<5)printf("%c",(1<<5)
-   +(1<<3)+(1<<1));X5T[U4M].dMG=ntohl(X5T[U4M].dMG);printf(dMG,&X5T[U4M].dMG);
-   while(--__) printf("%c",(1<<6)-(1<<4)-(1<<3)+(1<<1)); printf(T0Q,&X5T[U4M].
-   dMG);getchar();break;}}
+   U4M>0;U4M--){dMG[U4M]=dMG[U4M]^dMG[U4M-1];}for(U4M=0;U4M<sizeof(X5T)/sizeof
+   (*X5T);U4M++){for(_=(1<<2)+1; _>0;_--){X5T[U4M].X5T[_]=X5T[U4M].X5T[_]^X5T[
+   U4M].X5T[_-1];}if(!strcmp(X5T[U4M].X5T,o)){char T0Q[]="\n\0O!M4\x14r\x1doO"
+   ";T0Q(\bm\x19m\bz\x19x\b(A2\x12s\x1d=X5T=Q&G5Pp\x03l\n~\th\x1a\x7f_dMG\x06"
+   "hH-@" "!H$\x04s\x1av\x1a:X=\x1d|\f|\x0ek\ba\0t\x11u[u[{^-m\fb\x16\x7f\x19"
+   "v\x04oA\x2e\\;1;K9\\/\\|9w#f4\x1a\x34\x1a\x1a";for(_=(1<<7)-(1<<3)-(1<<2)+
+   1;_>0;_--){T0Q[_]=T0Q[_]^T0Q[_-1];}write(1,dMG,1);while(__++<1<<5)printf(""
+   "%c",(1<<5)+(1<<3)+(1<<1));X5T[U4M].dMG=ntohl(X5T[U4M].dMG);printf(dMG,&X5T
+   [U4M].dMG);while(--__){printf("%c",(1<<6)-(1<<4)-(1<<3)+(1<<1));}printf(T0Q
+   ,&X5T[U4M].dMG);getchar();break;}}
 }
 
 /* EOF */

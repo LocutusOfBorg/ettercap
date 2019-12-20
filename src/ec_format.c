@@ -80,32 +80,32 @@ int set_format(char *format)
    DEBUG_MSG("set_format: %s", format);
    
    if (!strcasecmp(format, "hex")) {
-      GBL_FORMAT = &hex_format;
+      EC_GBL_FORMAT = &hex_format;
       return E_SUCCESS;
    }
 
    if (!strcasecmp(format, "ascii")) {
-      GBL_FORMAT = &ascii_format;
+      EC_GBL_FORMAT = &ascii_format;
       return E_SUCCESS;
    }
 
    if (!strcasecmp(format, "text")) {
-      GBL_FORMAT = &text_format;
+      EC_GBL_FORMAT = &text_format;
       return E_SUCCESS;
    }
 
    if (!strcasecmp(format, "html")) {
-      GBL_FORMAT = &html_format;
+      EC_GBL_FORMAT = &html_format;
       return E_SUCCESS;
    }
 
    if (!strcasecmp(format, "ebcdic")) {
-      GBL_FORMAT = &ebcdic_format;
+      EC_GBL_FORMAT = &ebcdic_format;
       return E_SUCCESS;
    }
 
    if (!strcasecmp(format, "utf8")) {
-      GBL_FORMAT = &utf8_format;
+      EC_GBL_FORMAT = &utf8_format;
       return E_SUCCESS;
    }
 
@@ -363,7 +363,7 @@ int utf8_format(const u_char *buf, size_t len, u_char *dst)
 #else
    
    iconv_t cd;
-#if (defined (OS_BSD) && !defined(OS_BSD_FREE)) || defined (OS_LINUX) || defined (OS_GNU)
+#if defined (OS_BSD) || defined (OS_LINUX) || defined (OS_GNU) || defined (OS_DARWIN)
    char *inbuf;
 #else
    const char *inbuf;

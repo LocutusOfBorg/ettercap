@@ -14,30 +14,12 @@
    #include <windows.h>
 #endif
 
+#ifdef OS_DARWIN
+   #include <sys/types.h>
+#endif
+
+#include <ec_stdint.h>
 #include <ec_queue.h>
-
-#include <limits.h>
-
-#if defined HAVE_STDINT_H && !defined OS_SOLARIS
-	#include <stdint.h>
-	#include <sys/types.h>
-#elif defined OS_SOLARIS
-	#include <sys/inttypes.h>
-#endif
-
-#ifndef TYPES_DEFINED
-#define TYPES_DEFINED
-	typedef int8_t    int8;
-	typedef int16_t   int16;
-	typedef int32_t   int32;
-	typedef int64_t   int64;
-
-	typedef uint8_t   u_int8;
-	typedef uint16_t  u_int16;
-	typedef uint32_t  u_int32;
-	typedef uint64_t  u_int64;
-#endif
-
 
 #define LIBWDG_VERSION "0.10.3"
    
@@ -50,14 +32,6 @@ enum {
    WDG_E_FATAL      = 255,
 };
 
-/* min and max */
-
-#ifndef MIN
-   #define MIN(a, b)    (((a) < (b)) ? (a) : (b))
-#endif
-#ifndef MAX
-   #define MAX(a, b)    (((a) > (b)) ? (a) : (b))
-#endif
 
 extern void wdg_debug_init(void);
 extern void wdg_debug_close(void);
@@ -121,6 +95,8 @@ extern void wdg_bug(char *file, const char *function, int line, char *message);
 #define CTRL(x)      ((x) & 0x1f)
 #endif
 #define KEY_ESC      CTRL('[')
+#define KEY_DC		0512		/* delete-character key */
+#define KEY_IC		0513		/* insert-character key */
 
 /* information about the current screen */
 struct wdg_scr {

@@ -78,7 +78,7 @@ static int gw_discover_init(void *dummy)
    (void) dummy;
 
    /* don't show packets while operating */
-   GBL_OPTIONS->quiet = 1;
+   EC_GBL_OPTIONS->quiet = 1;
    
    /* wipe the global vars */
    memset(&ip, 0, sizeof(struct ip_addr));
@@ -108,9 +108,8 @@ static int gw_discover_fini(void *dummy)
  */
 static int get_remote_target(struct ip_addr *p_ip, u_int16 *p_port)
 {
-   struct in_addr ipaddr;
-   char input[24];
-   char *p, *tok;
+   char input[MAX_ASCII_ADDR_LEN + 1 + 5 + 1];
+   char ipstr[MAX_ASCII_ADDR_LEN];
 
    memset(input, 0, sizeof(input));
    
@@ -122,21 +121,16 @@ static int get_remote_target(struct ip_addr *p_ip, u_int16 *p_port)
       return -E_INVALID;
    
    /* get the hostname */
-   if ((p = ec_strtok(input, ":", &tok)) != NULL) {
-      if (inet_aton(p, &ipaddr) == 0)
-         return -E_INVALID;
+   if (ec_strsplit_ipport(input, ipstr, p_port))
+      return -E_INVALID;
 
-      ip_addr_init(p_ip, AF_INET, (u_char *)&ipaddr);
+   /* convert IP string into ip_addr struct */
+   if (ip_addr_pton(ipstr, p_ip))
+      return -E_INVALID;
 
-      /* get the port */
-      if ((p = ec_strtok(NULL, ":", &tok)) != NULL) {
-         *p_port = atoi(p);
-
-         /* correct parsing */
-         if (*p_port != 0)
-            return E_SUCCESS;
-      }
-   }
+   /* correct parsing */
+   if (*p_port != 0)
+      return E_SUCCESS;
 
    return -E_INVALID;
 }
@@ -159,12 +153,12 @@ static void do_discover(void)
    
    INSTANT_USER_MSG("\nRemote target is %s:%d...\n\n", tmp, port);
       
-   LIST_FOREACH(h, &GBL_HOSTLIST, next) {
+   LIST_FOREACH(h, &EC_GBL_HOSTLIST, next) {
       
       INSTANT_USER_MSG("Sending the SYN packet to %-15s [%s]\n", ip_addr_ntoa(&h->ip, tmp), mac_addr_ntoa(h->mac, tmp2));
       
       /* send the syn packet */
-      send_tcp_ether(h->mac, &GBL_IFACE->ip, &ip, htons(EC_MAGIC_16), htons(port), 0xabadc0de, 0xabadc0de, TH_SYN);
+      send_tcp_ether(h->mac, &EC_GBL_IFACE->ip, &ip, htons(EC_MAGIC_16), htons(port), 0xabadc0de, 0xabadc0de, TH_SYN);
    }
   
    /* wait some time for slower replies */
@@ -199,7 +193,7 @@ static void get_replies(struct packet_object *po)
       return;
 
    /* search the source mac address in the host list */
-   LIST_FOREACH(h, &GBL_HOSTLIST, next) {
+   LIST_FOREACH(h, &EC_GBL_HOSTLIST, next) {
       if (!memcmp(po->L2.src, h->mac, MEDIA_ADDR_LEN)) {
          INSTANT_USER_MSG("[%s] %s is probably a gateway for the LAN\n", mac_addr_ntoa(po->L2.src, tmp2), ip_addr_ntoa(&h->ip, tmp));
       }

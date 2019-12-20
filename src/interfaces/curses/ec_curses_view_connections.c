@@ -27,6 +27,7 @@
 #include <ec_services.h>
 #include <ec_format.h>
 #include <ec_inject.h>
+#include <ec_geoip.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -154,6 +155,7 @@ static void curses_connection_detail(void *conn)
    char tmp[MAX_ASCII_ADDR_LEN];
    char *proto = "";
    char name[MAX_HOSTNAME_LEN];
+   unsigned int row = 0;
    
    DEBUG_MSG("curses_connection_detail");
 
@@ -180,17 +182,34 @@ static void curses_connection_detail(void *conn)
    wdg_add_destroy_key(wdg_conn_detail, CTRL('Q'), NULL);
    
    /* print the information */
-   wdg_window_print(wdg_conn_detail, 1, 1, "Source MAC address      :  %s", mac_addr_ntoa(c->co->L2_addr1, tmp));
-   wdg_window_print(wdg_conn_detail, 1, 2, "Destination MAC address :  %s", mac_addr_ntoa(c->co->L2_addr2, tmp));
-   
-   wdg_window_print(wdg_conn_detail, 1, 4, "Source IP address       :  %s", ip_addr_ntoa(&(c->co->L3_addr1), tmp));
+   wdg_window_print(wdg_conn_detail, 1, ++row,    "Source MAC address      :  %s", 
+         mac_addr_ntoa(c->co->L2_addr1, tmp));
+   wdg_window_print(wdg_conn_detail, 1, ++row,    "Destination MAC address :  %s", 
+         mac_addr_ntoa(c->co->L2_addr2, tmp));
+   ++row;
+
+   wdg_window_print(wdg_conn_detail, 1, ++row,    "Source IP address       :  %s", 
+         ip_addr_ntoa(&(c->co->L3_addr1), tmp));
    if (host_iptoa(&(c->co->L3_addr1), name) == E_SUCCESS)
-      wdg_window_print(wdg_conn_detail, 1, 5, "                           %s", name);
+      wdg_window_print(wdg_conn_detail, 1, ++row, "Source hostname         :  %s", 
+            name);
+#ifdef HAVE_GEOIP
+   if (EC_GBL_CONF->geoip_support_enable)
+      wdg_window_print(wdg_conn_detail, 1, ++row, "Source location         :  %s", 
+            geoip_country_by_ip(&c->co->L3_addr1));
+#endif
    
-   wdg_window_print(wdg_conn_detail, 1, 6, "Destination IP address  :  %s", ip_addr_ntoa(&(c->co->L3_addr2), tmp));
+   wdg_window_print(wdg_conn_detail, 1, ++row,    "Destination IP address  :  %s", 
+         ip_addr_ntoa(&(c->co->L3_addr2), tmp));
    if (host_iptoa(&(c->co->L3_addr2), name) == E_SUCCESS)
-      wdg_window_print(wdg_conn_detail, 1, 7, "                           %s", name);
-   
+      wdg_window_print(wdg_conn_detail, 1, ++row, "Destination hostname    :  %s", name);
+#ifdef HAVE_GEOIP
+   if (EC_GBL_CONF->geoip_support_enable)
+      wdg_window_print(wdg_conn_detail, 1, ++row, "Destination location    :  %s",
+            geoip_country_by_ip(&c->co->L3_addr2));
+#endif
+   ++row;
+
    switch (c->co->L4_proto) {
       case NL_TYPE_UDP:
          proto = "UDP";
@@ -200,16 +219,21 @@ static void curses_connection_detail(void *conn)
          break;
    }
    
-   wdg_window_print(wdg_conn_detail, 1, 9, "Protocol                :  %s", proto);
-   wdg_window_print(wdg_conn_detail, 1, 10, "Source port             :  %-5d  %s", ntohs(c->co->L4_addr1), service_search(c->co->L4_addr1, c->co->L4_proto));
-   wdg_window_print(wdg_conn_detail, 1, 11, "Destination port        :  %-5d  %s", ntohs(c->co->L4_addr2), service_search(c->co->L4_addr2, c->co->L4_proto));
+   wdg_window_print(wdg_conn_detail, 1, ++row, "Protocol                :  %s", proto);
+   wdg_window_print(wdg_conn_detail, 1, ++row, "Source port             :  %-5d  %s", 
+         ntohs(c->co->L4_addr1), service_search(c->co->L4_addr1, c->co->L4_proto));
+   wdg_window_print(wdg_conn_detail, 1, ++row, "Destination port        :  %-5d  %s", 
+         ntohs(c->co->L4_addr2), service_search(c->co->L4_addr2, c->co->L4_proto));
    
-   wdg_window_print(wdg_conn_detail, 1, 13, "--> %d    <-- %d   total: %d ", c->co->tx, c->co->rx, c->co->xferred);
    
+   row++;
+   wdg_window_print(wdg_conn_detail, 1, ++row, "--> %d    <-- %d   total: %d ", c->co->tx, c->co->rx, c->co->xferred);
+   
+   row++;
    if (c->co->DISSECTOR.user) {
-      wdg_window_print(wdg_conn_detail, 1, 15, "Account                 :  %s / %s", c->co->DISSECTOR.user, c->co->DISSECTOR.pass);
+      wdg_window_print(wdg_conn_detail, 1, ++row, "Account                 :  %s / %s", c->co->DISSECTOR.user, c->co->DISSECTOR.pass);
       if (c->co->DISSECTOR.info)
-         wdg_window_print(wdg_conn_detail, 1, 16, "Additional Info         :  %s", c->co->DISSECTOR.info);
+         wdg_window_print(wdg_conn_detail, 1, ++row, "Additional Info         :  %s", c->co->DISSECTOR.info);
    }
 }
 
@@ -293,8 +317,8 @@ static void curses_connection_data_split(void)
    wdg_set_size(wdg_c2, current_screen.cols / 2 + 1, 3, -2, SYSMSG_WIN_SIZE - 2);
 
    /* set the buffers */
-   wdg_scroll_set_lines(wdg_c1, GBL_CONF->connection_buffer / (current_screen.cols / 2));
-   wdg_scroll_set_lines(wdg_c2, GBL_CONF->connection_buffer / (current_screen.cols / 2));
+   wdg_scroll_set_lines(wdg_c1, EC_GBL_CONF->connection_buffer / (current_screen.cols / 2));
+   wdg_scroll_set_lines(wdg_c2, EC_GBL_CONF->connection_buffer / (current_screen.cols / 2));
    
    /* link the widget together within the compound */
    wdg_compound_add(wdg_conndata, wdg_c1);
@@ -336,8 +360,8 @@ static void split_print(u_char *text, size_t len, struct ip_addr *L3_src)
    int ret;
    
    /* check the regex filter */
-   if (GBL_OPTIONS->regex && 
-       regexec(GBL_OPTIONS->regex, (const char*)text, 0, NULL, 0) != 0) {
+   if (EC_GBL_OPTIONS->regex && 
+       regexec(EC_GBL_OPTIONS->regex, (const char*)text, 0, NULL, 0) != 0) {
       return;
    }
 
@@ -345,7 +369,7 @@ static void split_print(u_char *text, size_t len, struct ip_addr *L3_src)
    SAFE_REALLOC(dispbuf, hex_len(len) * sizeof(u_char) + 1);
    
    /* format the data */
-   ret = GBL_FORMAT(text, len, dispbuf);
+   ret = EC_GBL_FORMAT(text, len, dispbuf);
    dispbuf[ret] = 0;
 
    if (!ip_addr_cmp(L3_src, &curr_conn->L3_addr1))
@@ -368,8 +392,8 @@ static void split_print_po(struct packet_object *po)
       return;
    
    /* check the regex filter */
-   if (GBL_OPTIONS->regex && 
-       regexec(GBL_OPTIONS->regex, (const char*)po->DATA.disp_data, 0, NULL, 0) != 0) {
+   if (EC_GBL_OPTIONS->regex && 
+       regexec(EC_GBL_OPTIONS->regex, (const char*)po->DATA.disp_data, 0, NULL, 0) != 0) {
       return;
    }
    
@@ -377,7 +401,7 @@ static void split_print_po(struct packet_object *po)
    SAFE_REALLOC(dispbuf, hex_len(po->DATA.disp_len) * sizeof(u_char) + 1);
       
    /* format the data */
-   ret = GBL_FORMAT(po->DATA.disp_data, po->DATA.disp_len, dispbuf);
+   ret = EC_GBL_FORMAT(po->DATA.disp_data, po->DATA.disp_len, dispbuf);
    dispbuf[ret] = 0;
         
    if (!ip_addr_cmp(&po->L3.src, &curr_conn->L3_addr1))
@@ -425,7 +449,7 @@ static void curses_connection_data_join(void)
    wdg_set_size(wdg_join, 2, 3, -2, SYSMSG_WIN_SIZE - 2);
    
    /* set the buffers */
-   wdg_scroll_set_lines(wdg_join, GBL_CONF->connection_buffer / (current_screen.cols / 2) );
+   wdg_scroll_set_lines(wdg_join, EC_GBL_CONF->connection_buffer / (current_screen.cols / 2) );
    
    /* link the widget together within the compound */
    wdg_compound_add(wdg_conndata, wdg_join);
@@ -456,8 +480,8 @@ static void join_print(u_char *text, size_t len, struct ip_addr *L3_src)
    int ret;
    
    /* check the regex filter */
-   if (GBL_OPTIONS->regex && 
-       regexec(GBL_OPTIONS->regex, (const char*)text, 0, NULL, 0) != 0) {
+   if (EC_GBL_OPTIONS->regex && 
+       regexec(EC_GBL_OPTIONS->regex, (const char*)text, 0, NULL, 0) != 0) {
       return;
    }
    
@@ -465,7 +489,7 @@ static void join_print(u_char *text, size_t len, struct ip_addr *L3_src)
    SAFE_REALLOC(dispbuf, hex_len(len) * sizeof(u_char) + 1);
    
    /* format the data */
-   ret = GBL_FORMAT(text, len, dispbuf);
+   ret = EC_GBL_FORMAT(text, len, dispbuf);
    dispbuf[ret] = 0;
    
    if (!ip_addr_cmp(L3_src, &curr_conn->L3_addr1))
@@ -487,8 +511,8 @@ static void join_print_po(struct packet_object *po)
       return;
    
    /* check the regex filter */
-   if (GBL_OPTIONS->regex && 
-       regexec(GBL_OPTIONS->regex, (const char*)po->DATA.disp_data, 0, NULL, 0) != 0) {
+   if (EC_GBL_OPTIONS->regex && 
+       regexec(EC_GBL_OPTIONS->regex, (const char*)po->DATA.disp_data, 0, NULL, 0) != 0) {
       return;
    }
    
@@ -496,7 +520,7 @@ static void join_print_po(struct packet_object *po)
    SAFE_REALLOC(dispbuf, hex_len(po->DATA.disp_len) * sizeof(u_char) + 1);
       
    /* format the data */
-   ret = GBL_FORMAT(po->DATA.disp_data, po->DATA.disp_len, dispbuf);
+   ret = EC_GBL_FORMAT(po->DATA.disp_data, po->DATA.disp_len, dispbuf);
    dispbuf[ret] = 0;
         
    if (!ip_addr_cmp(&po->L3.src, &curr_conn->L3_addr1))
@@ -590,7 +614,7 @@ static void inject_user(void)
    size_t len;
 
    /* escape the sequnces in the buffer */
-   len = strescape((char*)injectbuf, (char*)injectbuf);
+   len = strescape((char*)injectbuf, (char*)injectbuf, strlen(injectbuf)+1);
    
    /* check where to inject */
    if (wdg_c1->flags & WDG_OBJ_FOCUSED) {

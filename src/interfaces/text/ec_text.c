@@ -61,6 +61,7 @@ static void text_stop_cont(void);
 static void text_hosts_list(void);
 static void text_profile_list(void);
 static void text_visualization(void);
+static void text_redirects(void);
 
 /*******************************************/
 
@@ -273,7 +274,7 @@ void text_interface(void)
 
    DEBUG_MSG("text_interface");
    
-   LIST_FOREACH_SAFE(plugin, &GBL_OPTIONS->plugins, next, tmp) {
+   LIST_FOREACH_SAFE(plugin, &EC_GBL_OPTIONS->plugins, next, tmp) {
       /* check if the specified plugin exists */
       if (search_plugin(plugin->name) != E_SUCCESS) {
          plugin->exists = false;
@@ -290,10 +291,10 @@ void text_interface(void)
    mitm_start();
    
    /* start the sniffing method */
-   EXECUTE(GBL_SNIFF->start);
+   EXECUTE(EC_GBL_SNIFF->start);
   
    /* it is difficult to be interactive while reading from file... */
-   if (!GBL_OPTIONS->read) {
+   if (!EC_GBL_OPTIONS->read) {
       USER_MSG("\nText only Interface activated...\n");
       USER_MSG("Hit 'h' for inline help\n\n");
    }
@@ -302,13 +303,13 @@ void text_interface(void)
    ui_msg_flush(MSG_ALL);
   
    /* if we have to activate a plugin */
-   if (!LIST_EMPTY(&GBL_OPTIONS->plugins)) {
+   if (!LIST_EMPTY(&EC_GBL_OPTIONS->plugins)) {
       /* 
        * execute the plugin and close the interface if 
        * the plugin was not found or it has completed
        * its execution
        */
-      LIST_FOREACH_SAFE(plugin, &GBL_OPTIONS->plugins, next, tmp) {
+      LIST_FOREACH_SAFE(plugin, &EC_GBL_OPTIONS->plugins, next, tmp) {
           if (plugin->exists && text_plugin(plugin->name) != PLUGIN_RUNNING)
              /* skip plugin */
              USER_MSG("Plugin '%s' can not be started - skipping!\n\n", 
@@ -322,13 +323,13 @@ void text_interface(void)
       CANCELLATION_POINT();
       
       /* if there is a pending char to be read */
-      if (ec_poll_in(fileno(stdin), 10) || ec_poll_buffer(GBL_OPTIONS->script)) {
+      if (ec_poll_in(fileno(stdin), 10) || ec_poll_buffer(EC_GBL_OPTIONS->script)) {
          
          char ch = 0;
 
          /* get the input from the stdin or the buffer */
-         if (ec_poll_buffer(GBL_OPTIONS->script))
-            ch = getchar_buffer(&GBL_OPTIONS->script);
+         if (ec_poll_buffer(EC_GBL_OPTIONS->script))
+            ch = getchar_buffer(&EC_GBL_OPTIONS->script);
          else
             ch = getchar();
          
@@ -368,6 +369,10 @@ void text_interface(void)
             case ' ':
                text_stop_cont();
                break;
+            case 'R':
+            case 'r':
+               text_redirects();
+               break;
             case 'Q':
             case 'q':
                USER_MSG("Closing text interface...\n\n");
@@ -378,7 +383,7 @@ void text_interface(void)
       }
 
       /* print pending USER_MSG messages */
-      ui_msg_flush(10);
+      ui_msg_flush(INT_MAX);
                                  
    }
   
@@ -397,6 +402,7 @@ static void text_help(void)
    fprintf(stderr, " [lL]      - print the hosts list\n");
    fprintf(stderr, " [oO]      - print the profiles list\n");
    fprintf(stderr, " [cC]      - print the connections list\n");
+   fprintf(stderr, " [rR]      - adjust SSL intercept rules\n");
    fprintf(stderr, " [sS]      - print interfaces statistics\n");
    fprintf(stderr, " [<space>] - stop/cont printing packets\n");
    fprintf(stderr, " [qQ]      - quit\n\n");
@@ -410,9 +416,9 @@ static void text_help(void)
 static void text_stop_cont(void)
 {
    /* revert the quiet option */   
-   GBL_OPTIONS->quiet = (GBL_OPTIONS->quiet) ? 0 : 1; 
+   EC_GBL_OPTIONS->quiet = (EC_GBL_OPTIONS->quiet) ? 0 : 1; 
 
-   if (GBL_OPTIONS->quiet)
+   if (EC_GBL_OPTIONS->quiet)
       fprintf(stderr, "\nPacket visualization stopped...\n");
    else
       fprintf(stderr, "\nPacket visualization restarted...\n");
@@ -439,7 +445,7 @@ static void text_run_plugin(void)
       return;
    
    /* stop the visualization while the plugin interface is running */
-   if (!GBL_OPTIONS->quiet) {
+   if (!EC_GBL_OPTIONS->quiet) {
       text_stop_cont();
       restore = 1;
    }
@@ -502,7 +508,7 @@ static int text_toggle_filter_cb(struct filter_list *l, void *arg) {
 static void text_run_filter(void) {
    int restore = 0;
    /* stop the visualization while the plugin interface is running */
-   if (!GBL_OPTIONS->quiet) {
+   if (!EC_GBL_OPTIONS->quiet) {
       text_stop_cont();
       restore = 1;
    }
@@ -549,45 +555,45 @@ static void text_run_filter(void) {
 static void text_stats(void)
 {
    DEBUG_MSG("text_stats (pcap) : %" PRIu64 " %" PRIu64 " %" PRIu64,
-                                                GBL_STATS->ps_recv,
-                                                GBL_STATS->ps_drop,
-                                                GBL_STATS->ps_ifdrop);
+                                                EC_GBL_STATS->ps_recv,
+                                                EC_GBL_STATS->ps_drop,
+                                                EC_GBL_STATS->ps_ifdrop);
    DEBUG_MSG("text_stats (BH) : [%lu][%lu] p/s -- [%lu][%lu] b/s", 
-         GBL_STATS->bh.rate_adv, GBL_STATS->bh.rate_worst, 
-         GBL_STATS->bh.thru_adv, GBL_STATS->bh.thru_worst); 
+         EC_GBL_STATS->bh.rate_adv, EC_GBL_STATS->bh.rate_worst, 
+         EC_GBL_STATS->bh.thru_adv, EC_GBL_STATS->bh.thru_worst); 
    
    DEBUG_MSG("text_stats (TH) : [%lu][%lu] p/s -- [%lu][%lu] b/s", 
-         GBL_STATS->th.rate_adv, GBL_STATS->th.rate_worst, 
-         GBL_STATS->th.thru_adv, GBL_STATS->th.thru_worst); 
+         EC_GBL_STATS->th.rate_adv, EC_GBL_STATS->th.rate_worst, 
+         EC_GBL_STATS->th.thru_adv, EC_GBL_STATS->th.thru_worst); 
    
-   DEBUG_MSG("text_stats (queue) : %lu %lu", GBL_STATS->queue_curr, GBL_STATS->queue_max); 
+   DEBUG_MSG("text_stats (queue) : %lu %lu", EC_GBL_STATS->queue_curr, EC_GBL_STATS->queue_max); 
   
    
-   fprintf(stdout, "\n Received packets    : %8" PRIu64 "\n", GBL_STATS->ps_recv);
-   fprintf(stdout,   " Dropped packets     : %8" PRIu64 "  %.2f %%\n", GBL_STATS->ps_drop,
-         (GBL_STATS->ps_recv) ? (float)GBL_STATS->ps_drop * 100 / GBL_STATS->ps_recv : 0 );
+   fprintf(stdout, "\n Received packets    : %8" PRIu64 "\n", EC_GBL_STATS->ps_recv);
+   fprintf(stdout,   " Dropped packets     : %8" PRIu64 "  %.2f %%\n", EC_GBL_STATS->ps_drop,
+         (EC_GBL_STATS->ps_recv) ? (float)EC_GBL_STATS->ps_drop * 100 / EC_GBL_STATS->ps_recv : 0 );
    fprintf(stdout,   " Forwarded           : %8" PRIu64 "  bytes: %8" PRIu64 "\n\n",
-           GBL_STATS->ps_sent, GBL_STATS->bs_sent);
+           EC_GBL_STATS->ps_sent, EC_GBL_STATS->bs_sent);
    
-   fprintf(stdout,   " Current queue len   : %lu/%lu\n", GBL_STATS->queue_curr, GBL_STATS->queue_max);
-   fprintf(stdout,   " Sampling rate       : %d\n\n", GBL_CONF->sampling_rate);
+   fprintf(stdout,   " Current queue len   : %lu/%lu\n", EC_GBL_STATS->queue_curr, EC_GBL_STATS->queue_max);
+   fprintf(stdout,   " Sampling rate       : %d\n\n", EC_GBL_CONF->sampling_rate);
    
    fprintf(stdout,   " Bottom Half received packet : pck: %8" PRIu64 "  byte: %8" PRIu64 "\n",
-         GBL_STATS->bh.pck_recv, GBL_STATS->bh.pck_size);
+         EC_GBL_STATS->bh.pck_recv, EC_GBL_STATS->bh.pck_size);
    fprintf(stdout,   " Top Half received packet    : pck: %8" PRIu64 "  byte: %8" PRIu64 "\n",
-         GBL_STATS->th.pck_recv, GBL_STATS->th.pck_size);
+         EC_GBL_STATS->th.pck_recv, EC_GBL_STATS->th.pck_size);
    fprintf(stdout,   " Interesting packets         : %.2f %%\n\n",
-         (GBL_STATS->bh.pck_recv) ? (float)GBL_STATS->th.pck_recv * 100 / GBL_STATS->bh.pck_recv : 0 );
+         (EC_GBL_STATS->bh.pck_recv) ? (float)EC_GBL_STATS->th.pck_recv * 100 / EC_GBL_STATS->bh.pck_recv : 0 );
 
    fprintf(stdout,   " Bottom Half packet rate : worst: %8lu  adv: %8lu p/s\n", 
-         GBL_STATS->bh.rate_worst, GBL_STATS->bh.rate_adv);
+         EC_GBL_STATS->bh.rate_worst, EC_GBL_STATS->bh.rate_adv);
    fprintf(stdout,   " Top Half packet rate    : worst: %8lu  adv: %8lu p/s\n\n", 
-         GBL_STATS->th.rate_worst, GBL_STATS->th.rate_adv);
+         EC_GBL_STATS->th.rate_worst, EC_GBL_STATS->th.rate_adv);
    
    fprintf(stdout,   " Bottom Half throughput  : worst: %8lu  adv: %8lu b/s\n", 
-         GBL_STATS->bh.thru_worst, GBL_STATS->bh.thru_adv);
+         EC_GBL_STATS->bh.thru_worst, EC_GBL_STATS->bh.thru_adv);
    fprintf(stdout,   " Top Half throughput     : worst: %8lu  adv: %8lu b/s\n\n", 
-         GBL_STATS->th.thru_worst, GBL_STATS->th.thru_adv);
+         EC_GBL_STATS->th.thru_worst, EC_GBL_STATS->th.thru_adv);
 }
 
 /*
@@ -604,7 +610,7 @@ static void text_hosts_list(void)
    fprintf(stdout, "\n\nHosts list:\n\n");
    
    /* print the list */
-   LIST_FOREACH(hl, &GBL_HOSTLIST, next) {
+   LIST_FOREACH(hl, &EC_GBL_HOSTLIST, next) {
       
       ip_addr_ntoa(&hl->ip, ip);
       mac_addr_ntoa(hl->mac, mac);
@@ -630,7 +636,7 @@ static void text_visualization(void)
    int restore = 0;
    
    /* stop the visualization while the plugin interface is running */
-   if (!GBL_OPTIONS->quiet) {
+   if (!EC_GBL_OPTIONS->quiet) {
       text_stop_cont();
       restore = 1;
    }
@@ -664,7 +670,7 @@ static void text_profile_list(void)
    int restore = 0;
    
    /* stop the visualization while the profiles interface is running */
-   if (!GBL_OPTIONS->quiet) {
+   if (!EC_GBL_OPTIONS->quiet) {
       text_stop_cont();
       restore = 1;
    }
@@ -677,6 +683,78 @@ static void text_profile_list(void)
       text_stop_cont();
 }
 
+/* 
+ * print all redirect rules and ask user to add or delete
+ */
+static void text_redirects(void)
+{
+   char input[20];
+   int restore = 0, num, ret;
+   char *p, cmd;
+
+   
+   /* print registered entries */
+   text_redirect_print();
+
+   /* stop the virtualization while the redirect interface is running */
+   if (!EC_GBL_OPTIONS->quiet) {
+      text_stop_cont();
+      restore = 1;
+   }
+   /* print all pending user messages */
+   ui_msg_flush(MSG_ALL);
+
+   tcsetattr(0, TCSANOW, &old_tc);
+
+   /* print instructions */
+   fprintf(stdout, "'d <number>' to delete or 'i' to insert new redirect "
+         "(0 to quit): ");
+   fflush(stdout);
+
+   /* get user input */
+   fgets(input, 20, stdin);
+
+   do {
+      /* remote trailing line feed */
+      if ((p = strrchr(input, '\n')) != NULL)
+         *p = 0;
+
+      ret = sscanf(input, "%c %d", &cmd, &num);
+
+      if (ret == 1 && tolower(cmd) == 'i') {
+         text_redirect_add();
+
+         /* print registered entries */
+         text_redirect_print();
+
+
+      }
+      else if (ret == 2 && tolower(cmd) == 'd') {
+         text_redirect_del(num);
+
+         /* print registered entries */
+         text_redirect_print();
+      }
+      else if (!strcmp(input, "0") || !strcmp(input, "exit"))
+         break;
+
+      else
+         INSTANT_USER_MSG("Invalid input\n");
+      
+      /* print instructions */
+      fprintf(stdout, "'d <number>' to delete or 'i' to insert new redirect "
+            "(0 to quit): ");
+      fflush(stdout);
+
+   } while (fgets(input, 20, stdin) != NULL);
+
+
+   /* disable buffered input */
+   tcsetattr(0, TCSANOW, &new_tc);
+
+   if (restore)
+      text_stop_cont();
+}
 /* EOF */
 
 // vim:ts=3:expandtab

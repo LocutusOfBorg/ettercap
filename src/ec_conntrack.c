@@ -27,6 +27,7 @@
 #include <ec_conntrack.h>
 #include <ec_hash.h>
 #include <ec_sleep.h>
+#include <ec_geoip.h>
 
 /* globals */
 
@@ -270,7 +271,7 @@ static void conntrack_add(struct packet_object *po)
    cl->co->L4_proto = po->L4.proto;
  
    /* initialize the connection buffer */
-   connbuf_init(&cl->co->data, GBL_CONF->connection_buffer);
+   connbuf_init(&cl->co->data, EC_GBL_CONF->connection_buffer);
    
    /* update the connection entry */
    conntrack_update(cl->co, po);
@@ -392,7 +393,7 @@ EC_THREAD_FUNC(conntrack_timeouter)
        * sleep for the maximum time possible
        * (determined as the minumum of the timeouts)
        */
-      sec = MIN(GBL_CONF->connection_idle, GBL_CONF->connection_timeout);
+      sec = MIN(EC_GBL_CONF->connection_idle, EC_GBL_CONF->connection_timeout);
 
       DEBUG_MSG("conntrack_timeouter: sleeping for %lu sec", (unsigned long)sec);
       
@@ -429,11 +430,11 @@ EC_THREAD_FUNC(conntrack_timeouter)
           * update it only if the staus is active,
           * all the other status must be left as they are
           */
-         if (cl->co->status == CONN_ACTIVE && diff.tv_sec >= GBL_CONF->connection_idle)
+         if (cl->co->status == CONN_ACTIVE && diff.tv_sec >= EC_GBL_CONF->connection_idle)
             cl->co->status = CONN_IDLE;
          
          /* delete the timeouted connections */
-         if (diff.tv_sec >= GBL_CONF->connection_timeout) {
+         if (diff.tv_sec >= EC_GBL_CONF->connection_timeout) {
             /* wipe the connection */
             conntrack_del(cl->co);
             /* remove the element in the hash table */
@@ -614,6 +615,9 @@ void * conntrack_print(int mode, void *list, char **desc, size_t len)
    char src[MAX_ASCII_ADDR_LEN];
    char dst[MAX_ASCII_ADDR_LEN];
    char proto[2], status[8], flags[2];
+#ifdef HAVE_GEOIP
+   size_t slen;
+#endif
 
    /* NULL is used to retrieve the first element */
    if (list == NULL)
@@ -635,9 +639,21 @@ void * conntrack_print(int mode, void *list, char **desc, size_t len)
       /* determine the flags */
       conntrack_flagstr(c->co, flags, sizeof(flags));
       
-      snprintf(*desc, len, "%1s %15s:%-5d - %15s:%-5d %1s %s TX: %lu RX: %lu", flags, 
-                                           src, ntohs(c->co->L4_addr1), dst, ntohs(c->co->L4_addr2),
-                                           proto, status, (unsigned long)c->co->tx, (unsigned long)c->co->rx);
+      snprintf(*desc, len, "%1s %15s:%-5d - %15s:%-5d %1s %s TX: %lu RX: %lu", 
+            flags, src, ntohs(c->co->L4_addr1), dst, ntohs(c->co->L4_addr2),
+            proto, status, (unsigned long)c->co->tx, (unsigned long)c->co->rx);
+
+#ifdef HAVE_GEOIP
+      /* determine current string length */
+      slen = strlen(*desc);
+
+      /* check if enough space is available to append the GeoIP info */
+      if (len - slen > 14 && EC_GBL_CONF->geoip_support_enable) {
+         snprintf(*desc + slen, len - slen, ", CC: %2s > %2s", 
+               geoip_ccode_by_ip(&c->co->L3_addr1),
+               geoip_ccode_by_ip(&c->co->L3_addr2));
+      }
+#endif
    }
   
    /* return the next/prev/current to the caller */
@@ -799,6 +815,36 @@ int conntrack_statusstr(struct conn_object *conn, char *pstr, int len)
     return E_SUCCESS;
 }
 
+/*
+ * copies the country codes of a given connection object into pstr
+ * E_SUCCESS is returned on success
+ * -E_INVALID is returned if parameters are not initialized
+ * -E_INITFAIL if geoip API is not initialized properly
+ */
+int conntrack_countrystr(struct conn_object *conn, char *pstr, int len)
+{
+#ifdef HAVE_GEOIP
+   const char *ccode_src, *ccode_dst = NULL;
+#endif
+
+   if (pstr == NULL || conn == NULL || len < 8)
+      return -E_INVALID;
+
+#ifdef HAVE_GEOIP
+   if (!EC_GBL_CONF->geoip_support_enable)
+      return -E_INITFAIL;
+
+   if ((ccode_src = geoip_ccode_by_ip(&conn->L3_addr1)) == NULL)
+      return -E_INITFAIL;
+
+   if ((ccode_dst = geoip_ccode_by_ip(&conn->L3_addr2)) == NULL)
+      return -E_INITFAIL;
+
+   snprintf(pstr, len, "%2s > %2s", ccode_src, ccode_dst);
+#endif
+
+   return E_SUCCESS;
+}
 
 /* EOF */
 

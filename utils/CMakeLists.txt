@@ -2,7 +2,6 @@
 
 set(EF_SRC
             etterfilter/ef_compiler.c
-            etterfilter/ef_ec_compat.c
             etterfilter/ef_encode.c
             etterfilter/ef_main.c
             etterfilter/ef_output.c
@@ -13,9 +12,9 @@ set(EF_SRC
 
 find_package(BISON)
 find_package(FLEX)
-BISON_TARGET(EF_PARSER etterfilter/ef_grammar.y ${CMAKE_CURRENT_BINARY_DIR}/ef_grammar.c)
-FLEX_TARGET(EF_SCANNER etterfilter/ef_syntax.l ${CMAKE_CURRENT_BINARY_DIR}/ef_syntax.c)
-ADD_FLEX_BISON_DEPENDENCY(EF_SCANNER EF_PARSER)
+bison_target(EF_PARSER etterfilter/ef_grammar.y ${CMAKE_CURRENT_BINARY_DIR}/ef_grammar.c)
+flex_target(EF_SCANNER etterfilter/ef_syntax.l ${CMAKE_CURRENT_BINARY_DIR}/ef_syntax.c)
+add_flex_bison_dependency(EF_SCANNER EF_PARSER)
 
 # For ef_grammar.h
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
@@ -24,7 +23,7 @@ add_executable(etterfilter ${EF_SRC} ${FLEX_EF_SCANNER_OUTPUTS} ${BISON_EF_PARSE
 target_link_libraries(etterfilter lib_ettercap)
 if(NOT DISABLE_RPATH)
   set_target_properties(etterfilter PROPERTIES INSTALL_RPATH ${INSTALL_LIBDIR})
-endif(NOT DISABLE_RPATH)
+endif()
 
 ## Etterlog
 
@@ -34,7 +33,6 @@ set(EL_SRC
             etterlog/el_decode.c
             etterlog/el_decode_http.c
             etterlog/el_display.c
-            etterlog/el_ec_compat.c
             etterlog/el_log.c
             etterlog/el_main.c
             etterlog/el_parser.c
@@ -48,5 +46,5 @@ target_link_libraries(etterlog lib_ettercap)
 
 if(NOT DISABLE_RPATH)
   set_target_properties(etterlog PROPERTIES INSTALL_RPATH ${INSTALL_LIBDIR})
-endif(NOT DISABLE_RPATH)
+endif()
 install(TARGETS etterfilter etterlog DESTINATION ${INSTALL_BINDIR})

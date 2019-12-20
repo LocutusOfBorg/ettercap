@@ -316,7 +316,7 @@ static char *slashify (char *path)
  */
 const char *ec_win_get_user_dir (void)
 {
-  static char path[MAX_PATH] = "";
+  static char path[PATH_MAX] = "";
   char  *home;
 
   if (path[0])
@@ -346,7 +346,7 @@ const char *ec_win_get_user_dir (void)
  */
 const char *ec_win_get_ec_dir (void)
 {
-  static char path[MAX_PATH] = "c:\\";
+  static char path[PATH_MAX] = "c:\\";
   char *slash;
 
   if (GetModuleFileName(NULL,path,sizeof(path)) &&
@@ -1216,16 +1216,6 @@ static void __attribute__((destructor)) exit_console (void)
   has_console = FALSE;
 #endif
 }
-
-int inet_pton (int af, const char *src, void *dst)
-{
-    if (af != AF_INET) {
-      errno = WSAEAFNOSUPPORT;
-      return -1;
-    }
-    return inet_aton (src, dst);
-}
-
 
 /* EOF */
 

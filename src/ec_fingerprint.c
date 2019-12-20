@@ -131,9 +131,10 @@ int fingerprint_init(void)
 int fingerprint_search(const char *f, char *dst)
 {
    struct entry *l;
-
-   if (!strcmp(f, "")) {
-      strncpy(dst, "UNKNOWN", 7);
+  
+   //Do not process if length is invalid
+   if (!strcmp(f, "") || strlen(f) != FINGER_LEN) {
+      strncpy(dst, "UNKNOWN", 8);
       return E_SUCCESS;
    }
    
@@ -186,7 +187,7 @@ int fingerprint_search(const char *f, char *dst)
       }
    }
 
-   if(GBL_CONF->submit_fingerprint)
+   if(EC_GBL_CONF->submit_fingerprint)
    	fingerprint_submit(f, "Unknown");
    return -E_NOTFOUND;
 }
@@ -219,41 +220,41 @@ void fingerprint_push(char *finger, int param, int value)
    switch (param) {
       case FINGER_WINDOW:
          snprintf(tmp, sizeof(tmp), "%04X", value);
-         strncpy(finger + FINGER_WINDOW, tmp, 4);
+         strncpy(finger + FINGER_WINDOW, tmp, 5);
          break;
       case FINGER_MSS:
          snprintf(tmp, sizeof(tmp), "%04X", value);
-         strncpy(finger + FINGER_MSS, tmp, 4);
+         strncpy(finger + FINGER_MSS, tmp, 5);
          break;
       case FINGER_TTL:
          snprintf(tmp, sizeof(tmp), "%02X", TTL_PREDICTOR(value));
-         strncpy(finger + FINGER_TTL, tmp, 2);
+         strncpy(finger + FINGER_TTL, tmp, 3);
          break;
       case FINGER_WS:
          snprintf(tmp, sizeof(tmp), "%02X", value);
-         strncpy(finger + FINGER_WS, tmp, 2);
+         strncpy(finger + FINGER_WS, tmp, 3);
          break;
       case FINGER_SACK:
          snprintf(tmp, sizeof(tmp), "%d", value);
-         strncpy(finger + FINGER_SACK, tmp, 1);
+         strncpy(finger + FINGER_SACK, tmp, 2);
          break;
       case FINGER_NOP:
          snprintf(tmp, sizeof(tmp), "%d", value);
-         strncpy(finger + FINGER_NOP, tmp, 1);
+         strncpy(finger + FINGER_NOP, tmp, 2);
          break;
       case FINGER_DF:
          snprintf(tmp, sizeof(tmp), "%d", value);
-         strncpy(finger + FINGER_DF, tmp, 1);
+         strncpy(finger + FINGER_DF, tmp, 2);
          break;
       case FINGER_TIMESTAMP:
          snprintf(tmp, sizeof(tmp), "%d", value);
-         strncpy(finger + FINGER_TIMESTAMP, tmp, 1);
+         strncpy(finger + FINGER_TIMESTAMP, tmp, 2);
          break;
       case FINGER_TCPFLAG:
          if (value == 1)
-            strncpy(finger + FINGER_TCPFLAG, "A", 1);
+            strncpy(finger + FINGER_TCPFLAG, "A", 2);
          else
-            strncpy(finger + FINGER_TCPFLAG, "S", 1);
+            strncpy(finger + FINGER_TCPFLAG, "S", 2);
          break;
       case FINGER_LT:
          /*
@@ -263,7 +264,7 @@ void fingerprint_push(char *finger, int param, int value)
           */
          lt_old = strtoul(finger + FINGER_LT, NULL, 16);
          snprintf(tmp, sizeof(tmp), "%02X", value + lt_old);
-         strncpy(finger + FINGER_LT, tmp, 2);
+         strncpy(finger + FINGER_LT, tmp, 3);
          break;                                 
    }
 }
@@ -340,7 +341,7 @@ int fingerprint_submit(const char *finger, char *os)
                                      "Host: %s\r\n"
                                      "Accept: */*\r\n"
                                      "User-Agent: %s (%s)\r\n"
-                                     "\r\n", page, finger, os_encoded, host, GBL_PROGRAM, GBL_VERSION );
+                                     "\r\n", page, finger, os_encoded, host, EC_GBL_PROGRAM, EC_GBL_VERSION );
   
    SAFE_FREE(os_encoded);
 
