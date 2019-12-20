@@ -1,5 +1,6 @@
 ettercap (1:0.8.3-1) unstable; urgency=medium
 
+  [ Gianfranco Costamagna ]
   * New upstream release (Closes: #931361)
     - Default to gtk-3
   * Don't build against flex-old (Closes: #932513)
@@ -25,6 +26,9 @@ ettercap (1:0.8.3-1) unstable; urgency=medium
     libettercap-ui libraries.
   * Remove debian/NEWS file
   * Add R^3=no
+
+  [ Ondřej Nový ]
+  * d/changelog: Remove trailing whitespaces
 
  -- Gianfranco Costamagna <locutusofborg@debian.org>  Fri, 20 Dec 2019 13:22:02 +0100
 
