@@ -1,3 +1,10 @@
+ettercap (1:0.8.3-4) unstable; urgency=medium
+
+  * Move team maintenance under pkg-security umbrella
+  * Update copyright years
+
+ -- Gianfranco Costamagna <locutusofborg@debian.org>  Thu, 02 Jan 2020 11:29:18 +0100
+
 ettercap (1:0.8.3-3) unstable; urgency=medium
 
   * Drop build-dependency on ghostscript, we use groff now
