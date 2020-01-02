@@ -1,7 +1,7 @@
 Source: ettercap
 Section: net
 Priority: optional
-Maintainer: Debian Security Tools Packaging Team <pkg-security-team@lists.alioth.debian.org>
+Maintainer: Debian Security Tools <team+pkg-security@tracker.debian.org>
 Uploaders: Barak A. Pearlmutter <bap@debian.org>,
            Murat Demirten <murat@debian.org>,
            Gianfranco Costamagna <locutusofborg@debian.org>
@@ -25,8 +25,8 @@ Build-Depends: bison | bison++,
                libssl-dev
 Standards-Version: 4.4.1
 Homepage: https://ettercap.github.io/ettercap/
-Vcs-Git: https://salsa.debian.org/debian/ettercap.git
-Vcs-Browser: https://salsa.debian.org/debian/ettercap
+Vcs-Git: https://salsa.debian.org/pkg-security-team/ettercap.git
+Vcs-Browser: https://salsa.debian.org/pkg-security-team/ettercap
 
 Package: ettercap-common
 Architecture: any
