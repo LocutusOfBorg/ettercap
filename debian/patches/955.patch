@@ -1,4 +1,4 @@
-From 23f5e9ebb165ccaf037bdf021161d66b0a0cc7ed Mon Sep 17 00:00:00 2001
+From 4ec8c757af8e125b9ec991a568f2e6b39af9b002 Mon Sep 17 00:00:00 2001
 From: Gianfranco Costamagna <costamagnagianfranco@yahoo.it>
 Date: Sat, 13 Jul 2019 10:59:51 +0200
 Subject: [PATCH 1/2] Move appdata into new metainfo file location: see:
@@ -11,10 +11,10 @@ Subject: [PATCH 1/2] Move appdata into new metainfo file location: see:
  3 files changed, 34 insertions(+), 2 deletions(-)
  create mode 100644 desktop/ettercap.metainfo.xml
 
-Index: ettercap-0.8.3/CMakeLists.txt
+Index: ettercap/CMakeLists.txt
 ===================================================================
---- ettercap-0.8.3.orig/CMakeLists.txt
-+++ ettercap-0.8.3/CMakeLists.txt
+--- ettercap.orig/CMakeLists.txt
++++ ettercap/CMakeLists.txt
 @@ -120,7 +120,7 @@
  endif()
  set(PKEXEC_INSTALL_WRAPPER org.pkexec.ettercap CACHE PATH "Name of the pkexec action file")
@@ -24,10 +24,10 @@ Index: ettercap-0.8.3/CMakeLists.txt
  set(ICON_DIR ${INSTALL_PREFIX}/share/pixmaps CACHE PATH "Icon file installation directory")
  set(MAN_INSTALLDIR ${INSTALL_PREFIX}/share/man CACHE PATH "Path for manual pages")
  
-Index: ettercap-0.8.3/desktop/CMakeLists.txt
+Index: ettercap/desktop/CMakeLists.txt
 ===================================================================
---- ettercap-0.8.3.orig/desktop/CMakeLists.txt
-+++ ettercap-0.8.3/desktop/CMakeLists.txt
+--- ettercap.orig/desktop/CMakeLists.txt
++++ ettercap/desktop/CMakeLists.txt
 @@ -3,6 +3,6 @@
      ${PKEXEC_INSTALL_WRAPPER}.policy @ONLY)
    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${PKEXEC_INSTALL_WRAPPER}.policy DESTINATION ${POLKIT_DIR})
@@ -36,10 +36,10 @@ Index: ettercap-0.8.3/desktop/CMakeLists.txt
 +  install(FILES ettercap.metainfo.xml DESTINATION ${METAINFO_DIR})
    install(PROGRAMS ettercap-pkexec DESTINATION ${INSTALL_BINDIR})
  endif()
-Index: ettercap-0.8.3/desktop/ettercap.metainfo.xml
+Index: ettercap/desktop/ettercap.metainfo.xml
 ===================================================================
 --- /dev/null
-+++ ettercap-0.8.3/desktop/ettercap.metainfo.xml
++++ ettercap/desktop/ettercap.metainfo.xml
 @@ -0,0 +1,40 @@
 +<?xml version="1.0" encoding="UTF-8"?>
 +<!-- Copyright 2014 Gianfranco Costamagna <costamagnagianfranco@yahoo.it> -->
@@ -73,11 +73,11 @@ Index: ettercap-0.8.3/desktop/ettercap.metainfo.xml
 +
 +  <screenshots>
 +    <screenshot height="600" width="800" type="default">
-+      <image>http://ettercap.github.io/ettercap/screenshots/Screenshot-1.png</image>
-+      <image>http://ettercap.github.io/ettercap/screenshots/Screenshot-2.png</image>
++      <image>https://www.ettercap-project.org/screenshots/Screenshot-1.png</image>
++      <image>https://www.ettercap-project.org/screenshots/Screenshot-2.png</image>
 +    </screenshot>
 +  </screenshots>
-+  <url type="homepage">https://ettercap.github.io/ettercap</url>
++  <url type="homepage">https://www.ettercap-project.org</url>
 +  <url type="bugtracker">https://github.com/Ettercap/ettercap/issues</url>
 +  <update_contact>ettercap.project@gmail.com</update_contact>
 +</component>
