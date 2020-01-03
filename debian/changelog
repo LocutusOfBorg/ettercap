@@ -1,3 +1,10 @@
+ettercap (1:0.8.3-6) unstable; urgency=high
+
+  * debian/patches/977.patch:
+    - upstream fix for host scan issue.
+
+ -- Gianfranco Costamagna <locutusofborg@debian.org>  Fri, 03 Jan 2020 02:02:07 +0100
+
 ettercap (1:0.8.3-5) unstable; urgency=medium
 
   * Update 955 pr patch with new URIs
