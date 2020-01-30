@@ -1,0 +1,78 @@
+From 1ccc923b7917838d1e5ebb9bead1d2a53a0f442c Mon Sep 17 00:00:00 2001
+From: Gianfranco Costamagna <costamagnagianfranco@yahoo.it>
+Date: Thu, 30 Jan 2020 19:35:11 +0100
+Subject: [PATCH] Fix failures in finding libcheck, when multiple versions are
+ found (static/shared/pic/non-pick), all the flags are added unconditionally,
+ leading to errors e.g. on Ubuntu xenial
+
+Try another libcheck find method only if the previous attempt has been unsuccessful
+e.g.
+cd /<<PKGBUILDDIR>>/obj-text-only/tests && /usr/bin/cmake -E cmake_link_script CMakeFiles/test_ec_decode.dir/link.txt --verbose=1
+/usr/bin/x86_64-linux-gnu-gcc  -g -O2 -fPIE -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2  -O2 -g -DNDEBUG   -Wl,-Bsymbolic-functions -fPIE -pie -Wl,-z,relro -Wl,-z,now CMakeFiles/test_ec_decode.dir/test_ec_decode.c.o  -o test_ec_decode -rdynamic ../src/libettercap.so.0.8.3 ../src/interfaces/libettercap-ui.so.0.8.3 -Wl,-Bstatic -lcheck -Wl,-Bdynamic -lpthread -lcheck_pic -lrt -lm -lsubunit -lcheck_pic -pthread -lrt -lm -lsubunit -lncurses -lform -lncurses -lform -lpanel -lmenu -lbsd -lpcap -lssl -lcrypto -lz -ldl -lGeoIP -lnet -lresolv -lpcre ../src/lua/libec_lua.a -lluajit-5.1 -lpthread -Wl,-rpath,/<<PKGBUILDDIR>>/obj-text-only/src:/<<PKGBUILDDIR>>/obj-text-only/src/interfaces
+/usr/bin/ld: /usr/lib/gcc/x86_64-linux-gnu/5/../../../x86_64-linux-gnu/libcheck.a(check.o): relocation R_X86_64_32 against `.rodata.str1.1' can not be used when making a shared object; recompile with -fPIC
+/usr/lib/gcc/x86_64-linux-gnu/5/../../../x86_64-linux-gnu/libcheck.a: error adding symbols: Bad value
+---
+ cmake/Modules/FindLIBCHECK.cmake | 49 +++++++++++++++++++++-----------
+ 1 file changed, 33 insertions(+), 16 deletions(-)
+
+diff --git a/cmake/Modules/FindLIBCHECK.cmake b/cmake/Modules/FindLIBCHECK.cmake
+index 84a664d20..521ea15f5 100644
+--- a/cmake/Modules/FindLIBCHECK.cmake
++++ b/cmake/Modules/FindLIBCHECK.cmake
+@@ -8,23 +8,40 @@
+ find_package(PkgConfig)
+ include(FindPkgConfig)
+ pkg_check_modules(PC_LIBCHECK libcheck)
+-pkg_check_modules(PC_CHECK check)
+-set(LIBCHECK_DEFINITIONS ${PC_LIBCHECK_CFLAGS_OTHER})
+-find_path(LIBCHECK_INCLUDE_DIR check.h
+-  HINTS ${PC_LIBCHECK_INCLUDEDIR} ${PC_LIBCHECK_INCLUDE_DIRS})
++if(PC_LIBCHECK_FOUND)
++  set(LIBCHECK_FOUND TRUE)
++  set(LIBCHECK_LDFLAGS ${PC_LIBCHECK_LDFLGAS})
++  set(LIBCHECK_LIBRARIES ${PC_LIBCHECK_LIBRARIES})
++  set(LIBCHECK_INCLUDE_DIRS ${PC_LIBCHECK_INCLUDE_DIR})
++else()
++  pkg_check_modules(PC_CHECK check)
++  if(PC_CHECK_FOUND)
++    set(LIBCHECK_FOUND TRUE)
++    set(LIBCHECK_LDFLAGS ${PC_CHECK_LDFLGAS})
++    set(LIBCHECK_LIBRARIES ${PC_CHECK_LIBRARIES})
++    set(LIBCHECK_INCLUDE_DIRS ${PC_CHECK_INCLUDE_DIR})
++  else()
++    set(LIBCHECK_DEFINITIONS ${PC_LIBCHECK_CFLAGS_OTHER})
++    find_path(LIBCHECK_INCLUDE_DIR check.h
++      HINTS ${PC_LIBCHECK_INCLUDEDIR} ${PC_LIBCHECK_INCLUDE_DIRS})
+ 
+-find_library(LIBCHECK_LIBRARY NAMES check libcheck
+-  HINTS ${PC_LIBCHECK_LIBDIR} ${PC_LIBCHECK_LIBRARY_DIRS})
++    find_library(LIBCHECK_LIBRARY NAMES check libcheck
++      HINTS ${PC_LIBCHECK_LIBDIR} ${PC_LIBCHECK_LIBRARY_DIRS})
+ 
+-
+-include(FindPackageHandleStandardArgs)
+-# handle the QUIETLY and REQUIRED arguments and set LIBCHECK_FOUND to TRUE
+-# if all listed variables are TRUE
+-find_package_handle_standard_args(LIBCHECK DEFAULT_MSG
+-                                  LIBCHECK_LIBRARY LIBCHECK_INCLUDE_DIR)
+-if(LIBCHECK_FOUND)
+-  set(LIBCHECK_LDFLAGS ${PC_CHECK_LIBRARIES} ${PC_LIBCHECK_LIBRARIES} ${PC_CHECK_LDFLAGS} ${PC_LIBCHECK_LDFLGAS})
+-  set(LIBCHECK_LIBRARIES ${LIBCHECK_LIBRARY})
+-  set(LIBCHECK_INCLUDE_DIRS ${LIBCHECK_INCLUDE_DIR})
++    if(LIBCHECK_LIBRARY_FOUND)
++      set(LIBCHECK_FOUND TRUE)
++      set(LIBCHECK_LIBRARIES ${LIBCHECK_LIBRARY})
++    else()
++      include(FindPackageHandleStandardArgs)
++      # handle the QUIETLY and REQUIRED arguments and set LIBCHECK_FOUND to TRUE
++      # if all listed variables are TRUE
++      find_package_handle_standard_args(LIBCHECK DEFAULT_MSG
++                                      LIBCHECK_LIBRARY LIBCHECK_INCLUDE_DIR)
++      if(LIBCHECK_FOUND)
++        set(LIBCHECK_LIBRARIES ${LIBCHECK_LIBRARY})
++        set(LIBCHECK_INCLUDE_DIRS ${LIBCHECK_INCLUDE_DIR})
++      endif()
++    endif()
++  endif()
+ endif()
+ mark_as_advanced(LIBCHECK_INCLUDE_DIR LIBCHECK_LIBRARY)
