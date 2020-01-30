@@ -1,3 +1,9 @@
+ettercap (1:0.8.3-7) unstable; urgency=medium
+
+  * Add patch proposed upstream to fix build with older libcheck implementations
+
+ -- Gianfranco Costamagna <locutusofborg@debian.org>  Thu, 30 Jan 2020 19:39:16 +0100
+
 ettercap (1:0.8.3-6) unstable; urgency=high
 
   * debian/patches/977.patch:
