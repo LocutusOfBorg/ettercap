@@ -67,7 +67,7 @@ the required dependencies by running:
 > ```
 > apt-get install build-essential debhelper bison check cmake flex groff libbsd-dev \
 >      libcurl4-openssl-dev libmaxminddb-dev libgtk-3-dev libltdl-dev libluajit-5.1-dev \
->      libncurses5-dev libnet1-dev libpcap-dev libpcre2-dev libssl-dev
+>      libncurses-dev libnet1-dev libpcap-dev libpcre2-dev libssl-dev
 > ```
 
 ## LICENSE
